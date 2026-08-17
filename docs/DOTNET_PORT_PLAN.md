@@ -71,7 +71,7 @@ a natural fit, and the single largest structural change in the port (§3).
 | --- | --- | --- |
 | `onnxruntime` | **`Microsoft.ML.OnnxRuntime`** (+ `.Gpu`, `.Gpu.Linux`, `.Gpu.Windows`, `.DirectML`, OpenVINO/QNN packages) | **First-party, maintained by the ONNX Runtime team, with prebuilt natives on NuGet per execution provider.** This is the single biggest reason to choose .NET for this port — FaceFusion supports 8 EPs and `execution.py`'s provider matrix maps onto shipped packages instead of source builds. |
 | `numpy` | **No direct analogue** — see §4. `OpenCvSharp.Mat` for image-shaped data, `System.Numerics.Tensors` (`TensorPrimitives`) for vectorised elementwise ops, `Span<T>`/`Memory<T>` for slicing, `OrtValue` for model I/O | The main ergonomic tax of choosing .NET. Mitigated by building a small `TensorOps` layer in Phase 0 (§4). `numpy.interp` (79 uses!) is the single most-used primitive and has no BCL equivalent — write and test it first. |
-| `opencv-python-headless` | **`OpenCvSharp4`** + `OpenCvSharp4.runtime.{win,linux,osx}` (Apache-2.0, natives via NuGet) | Only ~35 distinct cv2 functions are used. Same C++ implementations → **bit-exact parity** for `WarpAffine`, `Resize` (INTER_AREA/CUBIC), `GaussianBlur`, `EstimateAffinePartial2D`. **Avoid Emgu.CV** — dual GPL/commercial licensing is a trap for an OSS project. |
+| `opencv-python-headless` | **`OpenCvSharp4`** + `OpenCvSharp4.runtime.{win,linux,osx}` | Only ~35 distinct cv2 functions are used. Same C++ implementations → **bit-exact parity** for `WarpAffine`, `Resize` (INTER_AREA/CUBIC), `GaussianBlur`, `EstimateAffinePartial2D`. Chosen over Emgu.CV on performance grounds: OpenCvSharp is a thinner P/Invoke layer over the native API with `Mat` as a direct handle, where Emgu interposes more managed abstraction per call — and this pipeline makes thousands of small cv2 calls per frame. |
 | `cv2.dnn.blobFromImage` | `CvDnn.BlobFromImage` | Does HWC→NCHW + scale + mean subtraction in native code. Use it for every model preprocess rather than hand-written managed loops — faster and closer to Python's numerics. |
 | `scipy.signal` | `MathNet.Numerics` (FFT, Hann window) + hand-written STFT/ISTFT/`lfilter`/`resample`; `triang` is a 3-line function | 6 call sites total (`audio.py`, `voice_extractor.py`). Contained but numerically fussy — `scipy.signal.stft` scaling and padding conventions must be reproduced exactly or lip-sync and voice extraction drift. |
 | `scipy.spatial.transform.Rotation` | `System.Numerics.Matrix4x4` / `Quaternion` | 1 call site (`live_portrait.py`, Euler xyz → matrix). Trivial. |
@@ -195,7 +195,9 @@ bugs that the parity harness (§7) exists to catch.
 
 ---
 
-## 5. Memory and GC (the .NET-specific risk)
+## 5. Memory, GC, and performance engineering
+
+### 5a. The GC risk
 
 A single 1080p BGR frame is ~6 MB. Anything over 85 KB lands on the **Large Object
 Heap**, which is not compacted by default. A naive port that allocates managed
@@ -225,6 +227,64 @@ optimisation:
 Add an allocation regression test to the parity harness: process N frames and assert
 Gen2 collections and peak working set stay under a threshold. This is cheap to write and
 catches the failure mode early, when it is still a one-line fix.
+
+### 5b. Where the real speed is
+
+The rules above are about *not being slower than Python*. These are about being
+meaningfully faster. All of them are available in .NET and none are done by the Python
+original — but each should be **measured before being adopted**, and none belong in v1
+until CLI parity is green (§10, Phase 6).
+
+**1. `OrtIoBinding` to cut host↔device copies.** Today every model invocation
+round-trips: CPU tensor → device → inference → device → CPU tensor. The pipeline runs
+detector → landmarker → recognizer → classifier → swapper → enhancer per face per frame,
+so those copies add up. `InferenceSession.CreateIoBinding()` lets you bind pre-allocated
+device memory to inputs and outputs; any layout-mismatch copy then happens **once at
+binding time rather than on every `Run`**. Bind once per session at pool-creation time
+and reuse across frames.
+
+The caveat that stops this being a free win: the inter-model steps (`warp_face_by_*`,
+`paste_back`) run on the CPU via OpenCV, so the pipeline cannot stay resident on the GPU
+end to end. The win is per-stage — biggest for the largest models (`face_swapper`,
+`frame_enhancer`) at high pixel-boost resolutions, negligible for the small detectors.
+Target it there.
+
+**2. Pinned (page-locked) host memory for transfers.** Where a copy is unavoidable, the
+CUDA EP moves data substantially faster out of page-locked memory than pageable memory.
+Allocate the staging buffers through ORT's CUDA pinned allocator (`OrtMemoryInfo` with
+the pinned allocator) rather than as ordinary managed arrays.
+
+**3. `System.IO.Pipelines` for the ffmpeg bridge.** `to_video`'s in-memory path pipes raw
+frames to and from ffmpeg over stdio. `System.IO.Pipelines` handles the
+partial-read/buffer-management problem with pooled memory and no per-read allocation —
+strictly better than naive `Stream.Read` loops, and this is a genuine hot path at 1080p+.
+
+**4. Default to the in-memory frame path.** FaceFusion already implements both a
+disk-based (`process_disk_frames`) and an in-memory (`process_memory_frames`) video path.
+The disk path writes every frame to a temp file and reads it back. Where
+`video_memory_strategy` allows, the .NET port should prefer the memory path — this is an
+application-level decision worth more than most micro-optimisation.
+
+**5. `CvDnn.BlobFromImage` over managed loops** — already noted in §2, restated because
+it matters: preprocessing must not be hand-written C# iterating pixels.
+
+### 5c. JIT vs NativeAOT — pick JIT
+
+An earlier revision of this plan treated NativeAOT as an attractive stretch goal. On
+reflection that is backwards for this workload:
+
+- **Steady-state throughput slightly favours the JIT.** Tiered compilation with Dynamic
+  PGO specialises hot managed code using runtime profile data and detects the actual CPU
+  ISA at runtime; NativeAOT commits to a baseline ISA at publish time.
+- **It barely matters either way**, because essentially all the compute is inside native
+  ORT and OpenCV. Managed codegen quality is not what determines this application's
+  throughput.
+- NativeAOT's genuine benefit is **startup time**, which matters for a CLI invoked once
+  per job and not at all for a long video render.
+
+**Recommendation: JIT, with `TieredPGO` enabled and ReadyToRun for startup** (§8). Treat
+NativeAOT as unnecessary rather than aspirational; it also conflicts with reflection-based
+DI and Blazor, so dropping it removes constraints from §3 and §6 for no measurable loss.
 
 ---
 
@@ -298,9 +358,9 @@ distribution: a self-contained publish instead of a conda environment.
 
 | Artifact | Approach |
 | --- | --- |
-| CLI | **Self-contained, trimmed publish** per RID (`linux-x64`, `win-x64`, `osx-arm64`). ORT and OpenCvSharp natives come from NuGet and land in the publish directory — no source builds, no conda. |
-| CLI (stretch) | **NativeAOT.** Attractive for startup time, but needs care: use source-generated `System.Text.Json` contexts, keep DI registrations explicit rather than assembly-scanning, and verify `System.CommandLine` trims cleanly. Treat as a post-v1 optimisation, not a v1 requirement. |
-| UI | Framework-dependent or self-contained; **not** NativeAOT (Blazor Server relies on reflection). |
+| CLI | **Self-contained publish** per RID (`linux-x64`, `win-x64`, `osx-arm64`) with **ReadyToRun** for startup and **`TieredPGO`** for steady-state throughput. ORT and OpenCvSharp natives come from NuGet and land in the publish directory — no source builds, no conda. |
+| CLI | **Not NativeAOT** — see §5c. It trades a small steady-state throughput loss for a startup gain that does not matter on a multi-minute render, while constraining DI and serialisation for no benefit. |
+| UI | Framework-dependent or self-contained (Blazor Server relies on reflection). |
 | Models | Unchanged — same `.assets/models` layout, same download/hash mechanism. |
 
 Still required on the host: `ffmpeg`, `ffprobe`, `curl` (as today), plus vendor GPU
@@ -310,10 +370,14 @@ drivers/toolkits for the chosen EP (as today).
 
 ## 9. Decisions to make before Phase 0
 
-1. **OpenCvSharp4 vs. a managed imaging stack.** Recommendation: **OpenCvSharp4**.
-   Parity is the dominant risk, and matching cv2's `WarpAffine` and `INTER_AREA`
-   semantics by hand is weeks of work with no user-visible benefit. Avoid Emgu.CV on
-   licensing grounds.
+1. **OpenCvSharp4 vs. Emgu.CV vs. a managed imaging stack.** Recommendation:
+   **OpenCvSharp4**, on two technical grounds. Against a managed stack: parity is the
+   dominant risk, and matching cv2's `WarpAffine` and `INTER_AREA` semantics by hand is
+   weeks of work with no user-visible benefit. Against Emgu.CV: OpenCvSharp is the
+   thinner binding, and this pipeline makes thousands of small native calls per frame, so
+   per-call managed overhead is the axis that matters. Neither library's CUDA modules are
+   relevant here — the Python original uses `opencv-python-headless`, which has no CUDA
+   support, so every cv2 operation being ported is already a CPU operation.
 2. **Scope of v1** — CLI-only parity, or CLI + UI? Recommendation: **CLI-only v1**. The
    Python Gradio UI keeps working against the Python core during the transition.
 3. **Compatibility contract** — must .NET read/write the same `.jobs` JSON,
@@ -444,6 +508,12 @@ harness is built first:
 | **CLI-parity v1 total** | **~5–6 months** |
 | 7 UI (Blazor Server) | 4–8 weeks |
 | 8 Streaming/webcam | 2–3 weeks |
+| 9 Performance tuning (§5b) | 2–3 weeks, post-parity |
+
+Phase 9 is deliberately sequenced *after* parity. IO binding, device-memory residency and
+pinned transfers all change how tensors move through the pipeline, and doing that while
+the numerics are still unverified means debugging two problems at once. Get it correct,
+lock the goldens, then make it fast against a suite that can prove you did not break it.
 
 The estimate is dominated by Phases 4–5, and those are dominated by **verification, not
 typing**. Any schedule that assumes "it's just numpy → Span" will be wrong by a factor of
@@ -470,3 +540,6 @@ NuGet package rather than by a source build.
    detector set) on CPU and CUDA via the `OrtValue` zero-copy path, and confirm output
    tensors match the Python session bit-for-bit. Run this in week one — it is cheap, and
    it validates the calling convention every later phase depends on.
+6. While in that spike, measure the same model with and without `OrtIoBinding` to get an
+   early read on how much §5b's copy elimination is actually worth on this hardware. One
+   afternoon's work, and it tells you whether Phase 9 deserves 3 weeks or 3 days.
