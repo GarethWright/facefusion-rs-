@@ -175,26 +175,44 @@ public static class CommonHelper
 
 	/// <summary>
 	/// Get the first item from an enumerable. Returns null if empty or null.
-	/// Note: For value types, this returns Nullable{T} which can be null.
+	/// IMPORTANT: For value types (struct T), this returns default(T), NOT null.
+	/// For value types, use GetFirstOrNull instead to get null on empty.
 	/// </summary>
 	public static T? GetFirst<T>(IEnumerable<T>? list)
 	{
-		if (list == null)
+		if (list != null)
 		{
-			return default;
-		}
-
-		foreach (var item in list)
-		{
-			return item;
+			foreach (var item in list)
+			{
+				return item;
+			}
 		}
 
 		return default;
 	}
 
 	/// <summary>
+	/// Get the first item from an enumerable of value types.
+	/// Returns null (as Nullable{T}) if empty or null.
+	/// </summary>
+	public static T? GetFirstOrNull<T>(IEnumerable<T>? list) where T : struct
+	{
+		if (list != null)
+		{
+			foreach (var item in list)
+			{
+				return item;
+			}
+		}
+
+		return null;
+	}
+
+	/// <summary>
 	/// Get the middle item from a list. Returns null if empty or null.
 	/// For a list with odd length, returns the item at position length/2.
+	/// IMPORTANT: For value types (struct T), this returns default(T), NOT null.
+	/// For value types, use GetMiddleOrNull instead to get null on empty.
 	/// </summary>
 	public static T? GetMiddle<T>(IReadOnlyList<T>? list)
 	{
@@ -207,8 +225,24 @@ public static class CommonHelper
 	}
 
 	/// <summary>
+	/// Get the middle item from a list of value types.
+	/// Returns null (as Nullable{T}) if empty or null.
+	/// For a list with odd length, returns the item at position length/2.
+	/// </summary>
+	public static T? GetMiddleOrNull<T>(IReadOnlyList<T>? list) where T : struct
+	{
+		if (list != null && list.Count > 0)
+		{
+			return list[list.Count / 2];
+		}
+
+		return null;
+	}
+
+	/// <summary>
 	/// Get the last item from an enumerable. Returns null if empty or null.
-	/// Note: For value types, this returns Nullable{T} which can be null.
+	/// IMPORTANT: For value types (struct T), this returns default(T), NOT null.
+	/// For value types, use GetLastOrNull instead to get null on empty.
 	/// </summary>
 	public static T? GetLast<T>(IEnumerable<T>? list)
 	{
@@ -225,6 +259,33 @@ public static class CommonHelper
 
 		// For other enumerables, iterate to the last item
 		T? last = default;
+		foreach (var item in list)
+		{
+			last = item;
+		}
+
+		return last;
+	}
+
+	/// <summary>
+	/// Get the last item from an enumerable of value types.
+	/// Returns null (as Nullable{T}) if empty or null.
+	/// </summary>
+	public static T? GetLastOrNull<T>(IEnumerable<T>? list) where T : struct
+	{
+		if (list == null)
+		{
+			return null;
+		}
+
+		// For IReadOnlyList, use direct indexing (efficient)
+		if (list is IReadOnlyList<T> readOnlyList && readOnlyList.Count > 0)
+		{
+			return readOnlyList[readOnlyList.Count - 1];
+		}
+
+		// For other enumerables, iterate to the last item
+		T? last = null;
 		foreach (var item in list)
 		{
 			last = item;

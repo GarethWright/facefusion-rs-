@@ -61,17 +61,45 @@ public class CommonHelperTests
 	[Fact]
 	public void TestGetFirst()
 	{
+		// Test with reference type - returns null on empty
+		Assert.Null(CommonHelper.GetFirst(Array.Empty<string>()));
+		Assert.Null(CommonHelper.GetFirst((string[]?)null));
+
+		// Test with value type unconstrained - returns default(T) on empty (0 for int)
 		Assert.Equal(1, CommonHelper.GetFirst(new[] { 1, 2, 3 }));
-		Assert.Equal(default(int?), CommonHelper.GetFirst(Array.Empty<int>()));
-		Assert.Equal(default(int?), CommonHelper.GetFirst((int[]?)null));
+		Assert.Equal(0, CommonHelper.GetFirst(Array.Empty<int>()));
+
+		// Test with value type OrNull variant - returns null on empty
+		Assert.Equal(1, CommonHelper.GetFirstOrNull(new[] { 1, 2, 3 }));
+		Assert.Null(CommonHelper.GetFirstOrNull(Array.Empty<int>()));
+		Assert.Null(CommonHelper.GetFirstOrNull((int[]?)null));
 	}
 
 	[Fact]
 	public void TestGetLast()
 	{
+		// Test with reference type - returns null on empty
+		Assert.Null(CommonHelper.GetLast(Array.Empty<string>()));
+		Assert.Null(CommonHelper.GetLast((string[]?)null));
+
+		// Test with value type unconstrained - returns default(T) on empty (0 for int)
 		Assert.Equal(3, CommonHelper.GetLast(new[] { 1, 2, 3 }));
-		Assert.Equal(default(int?), CommonHelper.GetLast(Array.Empty<int>()));
-		Assert.Equal(default(int?), CommonHelper.GetLast((int[]?)null));
+		Assert.Equal(0, CommonHelper.GetLast(Array.Empty<int>()));
+
+		// Test with value type OrNull variant - returns null on empty
+		Assert.Equal(3, CommonHelper.GetLastOrNull(new[] { 1, 2, 3 }));
+		Assert.Null(CommonHelper.GetLastOrNull(Array.Empty<int>()));
+		Assert.Null(CommonHelper.GetLastOrNull((int[]?)null));
+	}
+
+	[Fact]
+	public void TestGetMiddleOrNull()
+	{
+		// Test with value type OrNull variant
+		Assert.Equal(3, CommonHelper.GetMiddleOrNull(new[] { 1, 2, 3, 4, 5 }));
+		Assert.Equal(1, CommonHelper.GetMiddleOrNull(new[] { 1 }));
+		Assert.Null(CommonHelper.GetMiddleOrNull(Array.Empty<int>()));
+		Assert.Null(CommonHelper.GetMiddleOrNull((int[]?)null));
 	}
 
 	[Fact]
