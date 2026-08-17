@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using FaceFusion.Core;
 
 namespace FaceFusion.Media
 {
@@ -25,7 +26,7 @@ namespace FaceFusion.Media
 			// TODO(types): Command type alias should be resolved when FaceFusion.Types is available
 			var userAgent = MetadataName + "/" + MetadataVersion;
 			var result = new List<string?>();
-			result.Add(Which("curl"));
+			result.Add(ProcessHelper.Which("curl"));
 			result.Add("--user-agent");
 			result.Add(userAgent);
 			result.Add("--location");
@@ -76,26 +77,5 @@ namespace FaceFusion.Media
 			return new[] { "--retry", retry.ToString(CultureInfo.InvariantCulture) };
 		}
 
-		/// <summary>
-		/// Equivalent of Python's shutil.which() - finds an executable in PATH.
-		/// Returns null if not found, matching Python's behavior.
-		/// Deliberate reproduction of Python's behavior where None can appear in command lists.
-		/// </summary>
-		private static string? Which(string executable)
-		{
-			var pathEnvVar = Environment.GetEnvironmentVariable("PATH") ?? "";
-			var pathDirs = pathEnvVar.Split(Path.PathSeparator);
-
-			foreach (var dir in pathDirs)
-			{
-				var fullPath = Path.Combine(dir, executable);
-				if (File.Exists(fullPath))
-				{
-					return fullPath;
-				}
-			}
-
-			return null;
-		}
 	}
 }

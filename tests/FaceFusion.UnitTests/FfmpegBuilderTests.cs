@@ -1,45 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using FaceFusion.Core;
 using FaceFusion.Media;
 
 namespace FaceFusion.UnitTests;
 
 public class FfmpegBuilderTests
 {
-	// Mirrors shutil.which('ffmpeg') from the Python test. ffmpeg is not installed in the
-	// test environment, so this resolves to null on both sides.
-	private static string? WhichFfmpeg()
-	{
-		var pathVariable = Environment.GetEnvironmentVariable("PATH");
-
-		if (string.IsNullOrEmpty(pathVariable))
-		{
-			return null;
-		}
-
-		foreach (var directory in pathVariable.Split(Path.PathSeparator))
-		{
-			if (string.IsNullOrEmpty(directory))
-			{
-				continue;
-			}
-
-			var candidatePath = Path.Combine(directory, "ffmpeg");
-
-			if (File.Exists(candidatePath))
-			{
-				return candidatePath;
-			}
-		}
-
-		return null;
-	}
-
+	// ffmpeg is not installed in the test environment, so this resolves to null on both
+	// sides (mirrors shutil.which('ffmpeg') from the Python test).
 	[Fact]
 	public void TestRun()
 	{
-		Assert.Equal(new[] { WhichFfmpeg(), "-loglevel", "error" }, FfmpegBuilder.Run(Array.Empty<string>()));
+		Assert.Equal(new[] { ProcessHelper.Which("ffmpeg"), "-loglevel", "error" }, FfmpegBuilder.Run(Array.Empty<string>()));
 	}
 
 	[Fact]

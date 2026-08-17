@@ -1,4 +1,6 @@
 using System.Globalization;
+using FaceFusion.Core;
+using FaceFusion.Tensors;
 
 namespace FaceFusion.Media;
 
@@ -16,7 +18,7 @@ public static class FfmpegBuilder
 	/// </summary>
 	public static IReadOnlyList<string?> Run(IReadOnlyList<string> commands)
 	{
-		var result = new List<string?> { Which("ffmpeg"), "-loglevel", "error" };
+		var result = new List<string?> { ProcessHelper.Which("ffmpeg"), "-loglevel", "error" };
 		result.AddRange(commands);
 		return result;
 	}
@@ -246,7 +248,7 @@ public static class FfmpegBuilder
 
 	public static IReadOnlyList<string> SetImageQuality(string imagePath, int imageQuality)
 	{
-		if (GetFileFormat(imagePath) == "webp")
+		if (FileSystem.GetFileFormat(imagePath) == "webp")
 		{
 			return new[] { "-q:v", imageQuality.ToString(CultureInfo.InvariantCulture) };
 		}
@@ -527,89 +529,15 @@ public static class FfmpegBuilder
 	}
 
 	/// <summary>
-	/// Locates an executable on PATH, mirroring Python's shutil.which. Returns null when
-	/// not found (as Python's shutil.which does) rather than throwing.
-	///
-	/// This is a minimal local stand-in for a shared PATH-search helper; it duplicates
-	/// logic that other ported modules may also need and should be de-duplicated into a
-	/// shared location once one exists.
-	/// </summary>
-	private static string? Which(string executable)
-	{
-		var pathVariable = Environment.GetEnvironmentVariable("PATH");
-
-		if (string.IsNullOrEmpty(pathVariable))
-		{
-			return null;
-		}
-
-		var candidateNames = OperatingSystem.IsWindows()
-			? new[] { executable + ".exe", executable + ".cmd", executable + ".bat", executable }
-			: new[] { executable };
-
-		foreach (var directory in pathVariable.Split(Path.PathSeparator))
-		{
-			if (string.IsNullOrEmpty(directory))
-			{
-				continue;
-			}
-
-			foreach (var candidateName in candidateNames)
-			{
-				var candidatePath = Path.Combine(directory, candidateName);
-
-				if (File.Exists(candidatePath))
-				{
-					return candidatePath;
-				}
-			}
-		}
-
-		return null;
-	}
-
-	/// <summary>
-	/// Minimal local port of facefusion/filesystem.py's get_file_format, limited to what
-	/// SetImageQuality needs (the 'webp' comparison). Do not extend this into a general
-	/// filesystem helper here; filesystem.py is a separate, unported module.
-	/// </summary>
-	private static string? GetFileFormat(string filePath)
-	{
-		var fileExtension = Path.GetExtension(filePath);
-
-		if (string.IsNullOrEmpty(fileExtension))
-		{
-			return null;
-		}
-
-		fileExtension = fileExtension.ToLowerInvariant();
-
-		return fileExtension switch
-		{
-			".jpg" => "jpeg",
-			".tif" => "tiff",
-			".mpg" => "mpeg",
-			_ => fileExtension.TrimStart('.'),
-		};
-	}
-
-	/// <summary>
-	/// Linear interpolation matching numpy.interp for a scalar x against a two-point
-	/// (x0, x1) -> (y0, y1) table, clamping at the boundaries.
+	/// Scalar-signature adapter over <see cref="NumPy.Interp(float, ReadOnlySpan{float}, ReadOnlySpan{float})"/>
+	/// for this module's two-point (x0, x1) -&gt; (y0, y1) quality tables. Verified (see
+	/// port report) to reproduce the same rounded results as the double-precision scalar
+	/// formula for every SetAudioQuality/SetVideoQuality call site, including the
+	/// libmp3lame quality-50 banker's-rounding boundary (interp -> 4.5 -> 4).
 	/// </summary>
 	private static double Interp(double x, double x0, double x1, double y0, double y1)
 	{
-		if (x <= x0)
-		{
-			return y0;
-		}
-
-		if (x >= x1)
-		{
-			return y1;
-		}
-
-		return y0 + ((y1 - y0) * (x - x0) / (x1 - x0));
+		return NumPy.Interp((float)x, new[] { (float)x0, (float)x1 }, new[] { (float)y0, (float)y1 });
 	}
 
 	/// <summary>

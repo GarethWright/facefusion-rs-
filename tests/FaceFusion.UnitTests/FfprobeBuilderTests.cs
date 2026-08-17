@@ -1,36 +1,17 @@
 using System;
 using System.Collections.Generic;
+using FaceFusion.Core;
 using FaceFusion.Media;
 
 namespace FaceFusion.UnitTests;
 
 public class FfprobeBuilderTests
 {
-	/// <summary>
-	/// Helper equivalent to Python's shutil.which()
-	/// </summary>
-	private static string? Which(string executable)
-	{
-		var pathEnvVar = Environment.GetEnvironmentVariable("PATH") ?? "";
-		var pathDirs = pathEnvVar.Split(Path.PathSeparator);
-
-		foreach (var dir in pathDirs)
-		{
-			var fullPath = Path.Combine(dir, executable);
-			if (File.Exists(fullPath))
-			{
-				return fullPath;
-			}
-		}
-
-		return null;
-	}
-
 	[Fact]
 	public void TestRun()
 	{
 		var result = FfprobeBuilder.Run(new[] { "-v", "error" });
-		var expected = new List<string?> { Which("ffprobe"), "-loglevel", "error", "-v", "error" };
+		var expected = new List<string?> { ProcessHelper.Which("ffprobe"), "-loglevel", "error", "-v", "error" };
 
 		Assert.Equal(expected, result);
 	}

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FaceFusion.Core;
 using FaceFusion.Media;
 
 namespace FaceFusion.UnitTests;
@@ -11,26 +12,6 @@ public class CurlBuilderTests
 	private const string MetadataVersion = "3.8.2";
 	private const string MetadataUrl = "https://facefusion.io";
 
-	/// <summary>
-	/// Helper equivalent to Python's shutil.which()
-	/// </summary>
-	private static string? Which(string executable)
-	{
-		var pathEnvVar = Environment.GetEnvironmentVariable("PATH") ?? "";
-		var pathDirs = pathEnvVar.Split(Path.PathSeparator);
-
-		foreach (var dir in pathDirs)
-		{
-			var fullPath = Path.Combine(dir, executable);
-			if (File.Exists(fullPath))
-			{
-				return fullPath;
-			}
-		}
-
-		return null;
-	}
-
 	[Fact]
 	public void TestRun()
 	{
@@ -38,7 +19,7 @@ public class CurlBuilderTests
 		var result = CurlBuilder.Run(Array.Empty<string>());
 		var expected = new List<string?>
 		{
-			Which("curl"),
+			ProcessHelper.Which("curl"),
 			"--user-agent",
 			userAgent,
 			"--location",
