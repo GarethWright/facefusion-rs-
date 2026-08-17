@@ -2,9 +2,9 @@
 
 Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as phases land.
 
-**Current state: Phase 0–2 foundations, partial.** The solution builds clean and the
-test suite is green. Nothing here touches ONNX Runtime, OpenCV, or the face pipeline yet
-— those are Phases 3–5 and remain entirely unstarted.
+**Current state: Phase 0–2 foundations, partial.** Clean build with 0 warnings and
+0 errors; **237 tests, all passing**. Nothing here touches ONNX Runtime, OpenCV, or the
+face pipeline yet — those are Phases 3–5 and remain entirely unstarted.
 
 ## Environment deviation
 
@@ -39,11 +39,13 @@ Raising `TargetFramework` in `Directory.Build.props` is the whole migration.
 | `ffmpeg_builder.py` | `Media.FfmpegBuilder` | 41 functions |
 | `ffprobe_builder.py` | `Media.FfprobeBuilder` | ported |
 | `curl_builder.py` | `Media.CurlBuilder` | ported |
+| `shutil.which` (stdlib) | `Core.ProcessHelper.Which` | found/not-found, cross-checked |
 
 ## Parity defects found and fixed
 
-Each of these was caught by a test rather than by review, which is the argument for
-porting tests alongside code (plan §7, conventions rule 2).
+Each of these was caught by a test or by the de-duplication pass rather than by reading
+the C#, which is the argument for porting tests alongside code (plan §7, conventions
+rule 2).
 
 1. **`numpy.round(a, decimals)` ≠ `Math.Round(value, decimals)`.** NumPy computes
    `round(a * 10**decimals) / 10**decimals` entirely in the array's dtype, so the scaling
@@ -60,7 +62,13 @@ porting tests alongside code (plan §7, conventions rule 2).
    empty list indistinguishable from a leading `0`. Reachable in practice —
    `video_manager.py:92` calls `get_first`/`get_last` over ints. Struct-constrained
    `...OrNull` siblings added; both behaviours pinned by tests.
-4. **JSON serialisation dropped null-valued keys and used the wrong indent width.**
+4. **All three `shutil.which` copies skipped the execute-permission check.** Python's
+   `shutil.which` filters candidates with `os.access(path, X_OK)`; each of the three
+   independently-written ports checked only for existence, so a non-executable file
+   sharing a tool's name on `PATH` would have been returned as the tool. Fixed in the
+   shared `ProcessHelper.Which`, which checks the Unix mode bits on POSIX and applies
+   `PATHEXT` on Windows.
+5. **JSON serialisation dropped null-valued keys and used the wrong indent width.**
    `JsonIgnoreCondition.WhenWritingNull` would have silently removed
    `"date_updated": null`, which `job_manager.create_job` writes. Job files must
    round-trip between the two implementations (plan §9.3), so output is now byte-exact
