@@ -99,3 +99,10 @@ button:disabled { opacity: 0.55; cursor: default; }
 
 .ff-ok { color: var(--ff-ok); font-size: 0.8rem; margin: 0.25rem 0 0; word-break: break-all; }
 .ff-error { color: var(--ff-error); font-size: 0.8rem; margin: 0.25rem 0 0; word-break: break-all; }
+
+.ff-nav { padding: 1rem 1rem 0; }
+.ff-nav a { color: var(--ff-accent); text-decoration: none; font-size: 0.8rem; letter-spacing: 0.04em; }
+.ff-nav a:hover { text-decoration: underline; }
+
+.ff-layout-webcam { grid-template-columns: 1fr 2fr; }
+@media (max-width: 1100px) { .ff-layout-webcam { grid-template-columns: 1fr; } }

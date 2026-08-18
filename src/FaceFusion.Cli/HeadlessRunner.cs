@@ -406,7 +406,9 @@ public static class HeadlessRunner
 		return available.Count > 0 ? new[] { available[0] } : new[] { ExecutionProvider.Cpu };
 	}
 
-	internal static string ResolveModelsDirectory()
+	/// <summary>Python: <c>resolve_relative_path('../.assets/models')</c>. Public because the UI
+	/// project needs the same directory for its own preview and streaming runs.</summary>
+	public static string ResolveModelsDirectory()
 	{
 		var directory = new DirectoryInfo(System.AppContext.BaseDirectory);
 

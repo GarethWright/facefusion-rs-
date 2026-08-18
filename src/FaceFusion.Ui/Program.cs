@@ -21,6 +21,7 @@ builder.Services.AddSingleton<UiState>();
 builder.Services.AddSingleton<UiTerminal>();
 builder.Services.AddSingleton<UiRunner>();
 builder.Services.AddSingleton<UiPreview>();
+builder.Services.AddSingleton<UiWebcam>();
 
 var app = builder.Build();
 

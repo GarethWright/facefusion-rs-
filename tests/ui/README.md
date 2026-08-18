@@ -32,6 +32,20 @@ screen was wrong. Only a browser sees that.
 `/tmp/facefusion-test-examples` (`tools/parity/fetch_examples.sh`) and the `ddcolor` model in
 `.assets/models`, the same prerequisites the parity tests have.
 
+## The webcam layout — `webcam-test.mjs`
+
+Phase 8's live path. Checks that the layout renders, that a stream starts and delivers JPEG
+frames to the browser, that the frames keep changing (a stream, not one still), and that STOP
+returns the page to its idle state.
+
+    node webcam-test.mjs
+
+**It does not need a camera.** Python ships `camera_manager.get_remote_camera_capture(url)`,
+which takes any source OpenCV accepts — including a file path. The layout exposes that as a
+"remote source" field (the one addition this port makes to the Python UI, and the only way to
+exercise streaming on a machine with no device, such as this one). Set `WEBCAM_TEST_SOURCE` to
+override the video used.
+
 ## Output parity
 
 The video this test produces through the UI was compared against the same run driven from the

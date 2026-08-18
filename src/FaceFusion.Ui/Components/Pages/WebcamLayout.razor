@@ -1,0 +1,79 @@
+@page "/webcam"
+@rendermode InteractiveServer
+@inherits UiComponentBase
+@*
+    Port of facefusion/uis/layouts/webcam.py — the live layout. Python renders the same
+    processor option blocks as the default layout, minus everything that only makes sense for
+    a file run (no source/target/output, no trim, no output options).
+*@
+@inject UiWebcam Webcam
+
+<nav class="ff-nav"><a href="/">← default layout</a></nav>
+
+<div class="ff-layout ff-layout-webcam">
+    <div class="ff-column">
+        <AboutPanel />
+        <WebcamOptionsPanel />
+        <ProcessorsPanel />
+        <AgeModifierOptions />
+        <BackgroundRemoverOptions />
+        <DeepSwapperOptions />
+        <ExpressionRestorerOptions />
+        <FaceDebuggerOptions />
+        <FaceEditorOptions />
+        <FaceEnhancerOptions />
+        <FaceSwapperOptions />
+        <FrameColorizerOptions />
+        <FrameEnhancerOptions />
+        <LipSyncerOptions />
+        <ExecutionPanel />
+    </div>
+
+    <div class="ff-column ff-column-wide">
+        <section class="ff-panel">
+            <h2>STREAM</h2>
+
+            @if (Webcam.IsStreaming)
+            {
+                <button class="ff-button-primary" @onclick="Webcam.Stop">STOP</button>
+            }
+            else
+            {
+                <button class="ff-button-primary" @onclick="Webcam.Start">START</button>
+            }
+
+            @if (Webcam.LastError is { } error)
+            {
+                <p class="ff-error">@error</p>
+            }
+
+            @if (Webcam.ImageDataUri is { } dataUri)
+            {
+                <img class="ff-preview" id="ff-webcam-image" src="@dataUri" alt="webcam frame" />
+            }
+        </section>
+
+        <SourcePanel />
+        <FaceSelectorPanel />
+        <FaceMaskerPanel />
+        <TerminalPanel />
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Webcam.Changed += OnWebcamChanged;
+    }
+
+    public override void Dispose()
+    {
+        Webcam.Changed -= OnWebcamChanged;
+        base.Dispose();
+    }
+
+    // Frames arrive on the capture worker; InvokeAsync marshals each re-render onto the
+    // circuit. At 30 fps this is the same shape as the preview, just repeated.
+    private void OnWebcamChanged() => _ = InvokeAsync(StateHasChanged);
+}
