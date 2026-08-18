@@ -103,12 +103,21 @@ public static class HeadlessRunner
 		}
 
 		var built = new List<ProcessorStepFactory.BuiltStep>();
+		FacePipelineFactory.Resources? faceResources = null;
 
 		try
 		{
+			// Built once and shared across every processor in this step's --processors list —
+			// see FacePipelineFactory's class remarks on why (Python: one process-wide
+			// InferencePool per model, not one per processor module).
+			if (processorNames.Any(FacePipelineFactory.Requires))
+			{
+				faceResources = FacePipelineFactory.Build(args);
+			}
+
 			foreach (var name in processorNames)
 			{
-				built.Add(ProcessorStepFactory.Build(name, args));
+				built.Add(ProcessorStepFactory.Build(name, args, faceResources));
 			}
 
 			var processorSteps = built.Select(b => b.Step).ToArray();
@@ -179,6 +188,8 @@ public static class HeadlessRunner
 			{
 				step.Resource.Dispose();
 			}
+
+			faceResources?.Dispose();
 		}
 	}
 
@@ -216,7 +227,7 @@ public static class HeadlessRunner
 		return available.Count > 0 ? new[] { available[0] } : new[] { ExecutionProvider.Cpu };
 	}
 
-	private static string ResolveModelsDirectory()
+	internal static string ResolveModelsDirectory()
 	{
 		var directory = new DirectoryInfo(System.AppContext.BaseDirectory);
 

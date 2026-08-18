@@ -105,21 +105,27 @@ public enum BackgroundRemoverModelType
 ///
 /// <para>
 /// <b>Mask-scale mismatch in <c>process_frame</c> (reproduced deliberately, per
-/// PORT_CONVENTIONS.md rule 1 — flagged loudly, not silently "fixed").</b> Python's
-/// <c>process_frame</c> ends with
+/// PORT_CONVENTIONS.md rule 1 — flagged loudly, not silently "fixed"), only when a real one is
+/// present.</b> Python's <c>process_frame</c> ends with
 /// <c>temp_vision_mask = numpy.minimum.reduce([temp_vision_mask, inputs.get('temp_vision_mask')])</c>,
 /// where the first <c>temp_vision_mask</c> is <c>remove_background</c>'s own output — a
 /// <c>uint8</c> mask scaled <c>0-255</c> (<c>normalize_vision_mask</c>'s <c>* 255</c>,
-/// <c>astype(uint8)</c>) — combined elementwise against <c>inputs['temp_vision_mask']</c>, the
-/// rest of this codebase's <c>Mask</c> convention (<c>FaceMasker</c>'s <c>CV_32FC1</c>, values
-/// in <c>[0, 1]</c>, see its class remarks). Comparing a <c>0-255</c> array against a
-/// <c>0-1</c> array with <c>numpy.minimum</c> means the incoming <c>[0, 1]</c> mask wins almost
-/// everywhere the local mask is above 1.0 (i.e. almost everywhere it is not exactly 0) — this
-/// looks like a real scale-mismatch bug already present in upstream FaceFusion, not something
-/// introduced by this port, and is reproduced index-for-index in <see cref="ProcessFrame"/>
-/// (upcasting the local <c>uint8</c> mask to <c>CV_32FC1</c> <i>without</i> rescaling to
-/// <c>[0, 1]</c>, matching numpy's own dtype-only upcast on <c>numpy.minimum.reduce</c> of a
-/// mixed-dtype list) rather than silently rescaled to "what was probably intended".
+/// <c>astype(uint8)</c>). <c>inputs['temp_vision_mask']</c> is <b>not</b> always this codebase's
+/// <c>CV_32FC1</c>/<c>[0, 1]</c> convention (<c>FaceMasker</c>'s, see its class remarks) — most
+/// runs never touch it, in which case it is still <c>Vision.ExtractVisionMask</c>'s own
+/// <c>uint8</c>/<c>[0, 255]</c> default (an all-255 mask, or a real alpha channel), matching
+/// <c>remove_background</c>'s own output exactly and comparing correctly. Only when an earlier
+/// pipeline stage (a face masker) has already converted the mask to the float convention does
+/// numpy's dtype promotion actually kick in: <c>numpy.minimum.reduce</c> on a mixed
+/// <c>uint8</c>/<c>float32</c> list upcasts the <c>uint8</c> side to <c>float32</c>
+/// <i>without rescaling it to <c>[0, 1]</c></i>, so the incoming <c>[0, 1]</c> mask wins almost
+/// everywhere the local mask is not exactly 0 — a real scale-mismatch bug already present in
+/// upstream FaceFusion, not something introduced by this port. <see cref="ProcessFrame"/>
+/// reproduces both cases index-for-index: it takes the elementwise minimum directly when the two
+/// masks already share a Mat type (the common case — <c>Cv2.Min</c>, unlike <c>numpy.minimum</c>,
+/// throws on a type mismatch rather than silently promoting), and upcasts the local mask to the
+/// incoming mask's type <i>without</i> rescaling — matching numpy's own dtype-only upcast — only
+/// when the two differ.
 /// </para>
 ///
 /// <para>
@@ -747,16 +753,34 @@ public static class BackgroundRemover
         using var _resultMask = resultMask;
 
         // Python: `numpy.minimum.reduce([temp_vision_mask, inputs.get('temp_vision_mask')])` —
-        // `temp_vision_mask` here (resultMask) is uint8 in [0, 255]; `inputs['temp_vision_mask']`
-        // is this codebase's usual CV_32FC1 mask in [0, 1] (see the class remarks). Upcast the
-        // local mask to float32 *without* rescaling, matching numpy's dtype-only upcast of a
-        // mixed uint8/float32 list, then take the elementwise minimum — reproducing the
-        // documented scale mismatch rather than "fixing" it.
-        using var resultMaskAsFloat = new Mat();
-        resultMask.ConvertTo(resultMaskAsFloat, MatType.CV_32FC1);
+        // `temp_vision_mask` here (resultMask) is always uint8 in [0, 255]
+        // (`normalize_vision_mask`'s own `astype(uint8)`); `inputs['temp_vision_mask']` is
+        // whatever `extract_vision_mask` (or an upstream face-masking stage) produced. In the
+        // common case nothing upstream has touched the mask yet, so it is *also* CV_8UC1 (the
+        // all-255 default `extract_vision_mask` returns, or a real alpha channel) — numpy.minimum
+        // compares two same-dtype uint8 arrays and there is no scale question at all. Only when
+        // an upstream stage has already converted the mask to this codebase's other convention
+        // (CV_32FC1, values in [0, 1] — see `FaceMasker`'s class remarks) does numpy's own
+        // dtype promotion kick in: numpy.minimum.reduce on a mixed uint8/float32 list upcasts the
+        // uint8 array to float32 *without rescaling* (255 stays 255.0, not 1.0), which is the
+        // real, deliberately-reproduced scale mismatch this method carries over from upstream
+        // Python. `Cv2.Min` (unlike `numpy.minimum`) throws on mismatched Mat types rather than
+        // promoting one side itself, so the type check below only reproduces numpy's *promotion*,
+        // not a rescale — Cv2.Min still receives two same-type, same-size Mats either way.
+        Mat combinedMask;
 
-        var combinedMask = new Mat();
-        Cv2.Min(resultMaskAsFloat, tempVisionMask, combinedMask);
+        if (tempVisionMask.Type() == resultMask.Type())
+        {
+            combinedMask = new Mat();
+            Cv2.Min(resultMask, tempVisionMask, combinedMask);
+        }
+        else
+        {
+            using var resultMaskPromoted = new Mat();
+            resultMask.ConvertTo(resultMaskPromoted, tempVisionMask.Type());
+            combinedMask = new Mat();
+            Cv2.Min(resultMaskPromoted, tempVisionMask, combinedMask);
+        }
 
         return new ProcessorOutputs(resultFrame, combinedMask);
     }

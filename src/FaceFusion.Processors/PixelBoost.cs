@@ -116,11 +116,43 @@ public static class PixelBoost
                 nameof(tempVisionFrames));
         }
 
+        // Python's explode_pixel_boost is a pure numpy stack/reshape/transpose and is
+        // therefore dtype-agnostic. An earlier version of this method asserted CV_8UC3,
+        // which has no counterpart in the Python and broke the only real caller:
+        // FaceSwapper.SwapFace passes the FLOAT output of NormalizeCropFrame straight in
+        // (deliberately — its doc comment says never to cast back to uint8 first). The
+        // parity tests missed it because they exercise ForwardSwapFace directly rather
+        // than the full ProcessFrame -> SwapFace path.
+        var elementType = tempVisionFrames[0].Type();
+
+        return elementType switch
+        {
+            _ when elementType == MatType.CV_8UC3 =>
+                Explode<Vec3b>(tempVisionFrames, pixelBoostTotal, modelSize, pixelBoostSize, MatType.CV_8UC3),
+            _ when elementType == MatType.CV_32FC3 =>
+                Explode<Vec3f>(tempVisionFrames, pixelBoostTotal, modelSize, pixelBoostSize, MatType.CV_32FC3),
+            _ when elementType == MatType.CV_64FC3 =>
+                Explode<Vec3d>(tempVisionFrames, pixelBoostTotal, modelSize, pixelBoostSize, MatType.CV_64FC3),
+            _ => throw new ArgumentException(
+                $"tempVisionFrames must be 3-channel 8U, 32F or 64F; got {elementType}.",
+                nameof(tempVisionFrames))
+        };
+    }
+
+    /// <summary>
+    /// The interleave itself, independent of element type. Mirrors numpy's
+    /// <c>reshape(...).transpose(2, 0, 3, 1, 4).reshape(...)</c>: sub-image (pbh, pbw)
+    /// contributes the pixels at destination rows <c>mh * total + pbh</c> and columns
+    /// <c>mw * total + pbw</c>.
+    /// </summary>
+    private static Mat Explode<T>(
+        IReadOnlyList<Mat> tempVisionFrames, int pixelBoostTotal, Size modelSize, Size pixelBoostSize, MatType matType)
+        where T : unmanaged
+    {
         var modelHeight = modelSize.Height;
         var modelWidth = modelSize.Width;
         var destWidth = pixelBoostSize.Width;
-
-        var dest = new Vec3b[pixelBoostSize.Height * pixelBoostSize.Width];
+        var dest = new T[pixelBoostSize.Height * pixelBoostSize.Width];
 
         for (var pbh = 0; pbh < pixelBoostTotal; pbh++)
         {
@@ -128,14 +160,14 @@ public static class PixelBoost
             {
                 var subImage = tempVisionFrames[(pbh * pixelBoostTotal) + pbw];
 
-                if (subImage.Type() != MatType.CV_8UC3 || subImage.Rows != modelHeight || subImage.Cols != modelWidth)
+                if (subImage.Type() != matType || subImage.Rows != modelHeight || subImage.Cols != modelWidth)
                 {
                     throw new ArgumentException(
-                        $"tempVisionFrames[{(pbh * pixelBoostTotal) + pbw}] must be a CV_8UC3 {modelWidth}x{modelHeight} frame.",
+                        $"tempVisionFrames[{(pbh * pixelBoostTotal) + pbw}] must be a {matType} {modelWidth}x{modelHeight} frame.",
                         nameof(tempVisionFrames));
                 }
 
-                subImage.GetArray(out Vec3b[] sourcePixels);
+                subImage.GetArray(out T[] sourcePixels);
 
                 for (var mh = 0; mh < modelHeight; mh++)
                 {
@@ -152,7 +184,7 @@ public static class PixelBoost
             }
         }
 
-        var result = new Mat(pixelBoostSize.Height, pixelBoostSize.Width, MatType.CV_8UC3);
+        var result = new Mat(pixelBoostSize.Height, pixelBoostSize.Width, matType);
         result.SetArray(dest);
         return result;
     }
