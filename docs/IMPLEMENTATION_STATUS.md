@@ -2,8 +2,9 @@
 
 Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as phases land.
 
-**Current state: Phase 0–2 foundations, partial.** Clean build with 0 warnings and
-0 errors; **237 tests, all passing**. Nothing here touches ONNX Runtime, OpenCV, or the
+**Current state: Phase 0 complete, Phases 1–2 partial.** Clean build with 0 warnings and
+0 errors; **295 tests, all passing** (237 unit + 58 parity). Nothing here
+touches ONNX Runtime, OpenCV, or the
 face pipeline yet — those are Phases 3–5 and remain entirely unstarted.
 
 ## Environment deviation
@@ -40,6 +41,9 @@ Raising `TargetFramework` in `Directory.Build.props` is the whole migration.
 | `ffprobe_builder.py` | `Media.FfprobeBuilder` | ported |
 | `curl_builder.py` | `Media.CurlBuilder` | ported |
 | `shutil.which` (stdlib) | `Core.ProcessHelper.Which` | found/not-found, cross-checked |
+| — (new) | `Parity.NpyReader` / `NpyArray` | 23 committed `.npy` fixtures |
+| — (new) | `Parity.TensorComparison` | vs real `numpy.allclose` |
+| — (new) | `Parity.ImageMetrics` | vs independent NumPy reference |
 
 ## Parity defects found and fixed
 
@@ -86,16 +90,18 @@ rule 2).
   `FaceFusion.Tensors` and OpenCV in Phases 3–4.
 - **`Media` builders still take `string` where an enum belongs**, marked `TODO(types)`
   throughout. The types now exist; tightening the signatures is mechanical.
-- **No parity harness yet.** Plan §7's `.npy` interchange and `NpyReader` are not built.
-  This is the most important outstanding Phase 0 item, and it gates Phase 4 —
-  floating-point parity in the face pipeline cannot be verified without it.
+- **The parity harness has no real pipeline to compare against yet.** The reader,
+  comparison and metrics layers are built and tested (see `docs/PARITY_HARNESS.md`), and
+  `tools/parity/parity_dump.py` is ready for Phase 4 to call — but nothing dumps from a
+  real FaceFusion run, because the face pipeline is not ported and neither ffmpeg nor the
+  models exist in this environment.
+- **SSIM is verified against an independent NumPy reference, not against skimage**, which
+  is not installed here. Both implementations could share a conceptual error.
 
 ## Next steps, in order
 
-1. Build the parity harness (plan §7) — `.npy` dumping on the Python side, `NpyReader` on
-   the .NET side, comparison driver. Everything in Phases 4–5 depends on it.
-2. Port `config.py` + `facefusion.ini` and the `Settings` record with DI (plan §3, Phase 1).
-3. Tighten the `TODO(types)` signatures in `Media` now that `FaceFusion.Types` exists.
-4. Port `ffmpeg.py` / `ffprobe.py` runners, `vision.py`, `temp_helper.py` (Phase 2),
+1. Port `config.py` + `facefusion.ini` and the `Settings` record with DI (plan §3, Phase 1).
+2. Tighten the `TODO(types)` signatures in `Media` now that `FaceFusion.Types` exists.
+3. Port `ffmpeg.py` / `ffprobe.py` runners, `vision.py`, `temp_helper.py` (Phase 2),
    reaching the milestone of extracting, rewriting and remerging video frames with no
    models involved.
