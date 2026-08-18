@@ -54,10 +54,31 @@ type per file; file name matches the type name.
    Command lines and file formats must not vary by locale. `InvariantGlobalization` is
    on, but be explicit anyway.
 
+## Gotchas that have bitten several agents
+
+- **`Assert.Equal(float, float, int)` does not compile.** xunit cannot choose between
+  `Assert.Equal(double, double, int)` and `Assert.Equal(float, float, float)`, so a
+  precision-based comparison of two floats is ambiguous. Cast both operands to `double`:
+  `Assert.Equal((double)expected, (double)actual, precision: 4)`. Keep the `f` suffix on a
+  float32 ground-truth literal before the cast — `(double)29.590002f` and
+  `(double)29.590002` are different values.
+- **Test classes that create ONNX Runtime sessions must be `[Collection("NativeInference")]`.**
+  ORT's bindings segfault rather than throw on use-after-dispose, and a native fault in one
+  xunit collection takes the whole test host down — reporting a partial run as passing.
+- **Test classes that write to the shared output directory must be `[Collection("MediaOutput")]`,**
+  or they delete each other's files mid-run and fail only when run together.
+- **Do not run the full test suite** while other agents are working. It takes several
+  minutes on 4 cores; concurrent full runs once drove load average to 71 and stalled
+  everything. Use `--filter` scoped to what you are changing.
+
 ## What not to do
 
-- Do not add dependencies on OpenCV, ONNX Runtime, or any NuGet package in these phases.
-  The foundation layers are pure BCL.
+- Do not add NuGet packages without asking. The dependency set is settled: OpenCvSharp4
+  (+ its native runtime) for imaging, Microsoft.ML.OnnxRuntime for inference,
+  Google.Protobuf for reading .onnx initializers, xunit for tests. `FaceFusion.Types`,
+  `.Core`, `.Tensors`, `.Jobs` and `.Parity` are deliberately pure BCL — keep them that
+  way, and note that `FaceFusion.Types` cannot reference `FaceFusion.Core` (the dependency
+  runs the other way).
 - Do not port a module that is not in your assignment, even if it looks easy — parallel
   agents will collide. Report what you needed and stop.
 - Do not create stub/placeholder implementations that throw `NotImplementedException`
