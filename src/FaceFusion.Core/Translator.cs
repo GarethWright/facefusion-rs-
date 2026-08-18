@@ -34,12 +34,32 @@ namespace FaceFusion.Core
 		/// <param name="notation">Dot-separated key notation (e.g., "help.run", "processing_stopped")</param>
 		/// <param name="moduleName">Module name, defaults to "facefusion"</param>
 		/// <returns>The localized message string, or null if not found</returns>
+		/// <summary>
+		/// Python: <c>__autoload__</c>. Registers the built-in locale table the first time a
+		/// module's messages are requested, so callers do not have to remember to call
+		/// <see cref="Load"/> during startup.
+		/// </summary>
+		private static void Autoload(string moduleName)
+		{
+			if (moduleName == "facefusion")
+			{
+				Load(new Dictionary<string, object> { { "en", Locales.En } }, moduleName);
+			}
+		}
+
 		public static string? Get(string notation, string moduleName = "facefusion")
 		{
+			// Python's get() calls __autoload__ on a miss, which imports <module>.locales and
+			// registers it. Without an equivalent here, every Get returned null in
+			// production and every log line printed its raw key instead of English text —
+			// the unit tests missed it because they call Load() themselves first, which
+			// production never did.
+			//
+			// C# has no dynamic import, but the one module that ships a locale table is
+			// known at compile time, so autoload resolves it directly.
 			if (!LocalePoolSet.ContainsKey(moduleName))
 			{
-				// Auto-load if needed (in C#, we just return null since we can't do dynamic imports)
-				// The Python code would try to import the module, but in C# we rely on explicit Load()
+				Autoload(moduleName);
 			}
 
 			if (!LocalePoolSet.TryGetValue(moduleName, out var moduleLocales))

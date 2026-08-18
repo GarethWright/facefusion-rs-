@@ -35,6 +35,42 @@ public static class CommandFactory
         "job-run", "job-run-all", "job-retry", "job-retry-all"
     };
 
+    /// <summary>
+    /// Python's <c>core.py:cli()</c> calls <c>logger.init(state_manager.get_item('log_level'))</c>
+    /// before routing. Without the equivalent the logger sat at its default Warn and
+    /// silently dropped every Info message — the run still worked, but "processing to
+    /// video succeeded" never appeared, so the CLI looked like it had done nothing.
+    ///
+    /// facefusion.ini's default log_level is "info", so that is the fallback here.
+    /// </summary>
+    /// <summary>
+    /// Same initialisation as <see cref="CreateLogger"/>, for the commands whose options
+    /// arrive in the collected step-args bag rather than as a bound option.
+    /// </summary>
+    private static Logger CreateLoggerFromArgs(IReadOnlyDictionary<string, object?> args)
+    {
+        var logger = new Logger();
+        var requested = args.TryGetValue("log_level", out var value) ? value as string : null;
+
+        logger.Init(requested is not null && EnumNames.TryFromWireName<LogLevel>(requested, out var parsed)
+            ? parsed
+            : LogLevel.Info);
+
+        return logger;
+    }
+
+    private static Logger CreateLogger(ParseResult result, Option<string?> logLevelOption)
+    {
+        var logger = new Logger();
+        var requested = result.GetValue(logLevelOption);
+
+        logger.Init(requested is not null && EnumNames.TryFromWireName<LogLevel>(requested, out var parsed)
+            ? parsed
+            : LogLevel.Info);
+
+        return logger;
+    }
+
     public static RootCommand CreateRootCommand()
     {
         var root = new RootCommand("FaceFusion — industry leading face manipulation platform");
@@ -48,9 +84,11 @@ public static class CommandFactory
         var jobStatus = new Option<string>("--job-status") { Description = "specify the job status" };
         jobStatus.DefaultValueFactory = _ => "drafted";
 
+        var logLevel = new Option<string?>("--log-level") { Description = "adjust the message severity displayed in the terminal" };
+
         foreach (var name in JobManagerCommands)
         {
-            var command = new Command(name, DescribeCommand(name)) { jobsPath };
+            var command = new Command(name, DescribeCommand(name)) { jobsPath, logLevel };
 
             if (NeedsJobId(name))
             {
@@ -87,7 +125,7 @@ public static class CommandFactory
                     return 1;
                 }
 
-                var router = new JobRouter(manager, new Logger());
+                var router = new JobRouter(manager, CreateLogger(result, logLevel));
                 var status = EnumNames.TryFromWireName<JobStatus>(result.GetValue(jobStatus) ?? "drafted", out var parsed)
                     ? parsed
                     : JobStatus.Drafted;
@@ -106,7 +144,7 @@ public static class CommandFactory
 
         foreach (var name in JobRunnerCommands)
         {
-            var command = new Command(name, DescribeCommand(name)) { jobsPath };
+            var command = new Command(name, DescribeCommand(name)) { jobsPath, logLevel };
 
             if (name is "job-run" or "job-retry")
             {
@@ -127,7 +165,7 @@ public static class CommandFactory
                     return 1;
                 }
 
-                var router = new JobRouter(manager, new Logger());
+                var router = new JobRouter(manager, CreateLogger(result, logLevel));
 
                 // Running a step needs the full processing pipeline, which is assembled by
                 // the headless path. Until that is wired, report rather than pretend.
@@ -149,7 +187,64 @@ public static class CommandFactory
         }
 
         root.Add(CreateUiPlaceholderCommand());
+        root.Add(CreateHeadlessRunCommand());
+        root.Add(CreateBatchRunCommand());
         return root;
+    }
+
+    /// <summary>Port of the <c>headless-run</c> branch of <c>facefusion.py</c>'s <c>cli</c>
+    /// entry point — parses the full processing option surface, then runs
+    /// <see cref="HeadlessRunner.ProcessHeadless"/>.</summary>
+    private static Command CreateHeadlessRunCommand()
+    {
+        var command = new Command("headless-run", "run the program in headless mode");
+        var jobsPath = new Option<string>("--jobs-path") { Description = "specify the directory containing jobs" };
+        jobsPath.DefaultValueFactory = _ => ".jobs";
+        command.Add(jobsPath);
+
+        var stepOptions = AttachStepOptions(command, "headless-run");
+
+        command.SetAction(result =>
+        {
+            var manager = new JobManager(result.GetValue(jobsPath) ?? ".jobs");
+
+            if (!manager.InitJobs())
+            {
+                return 1;
+            }
+
+            var args = CollectStepArgs(result, stepOptions);
+            return HeadlessRunner.ProcessHeadless(args, manager, CreateLoggerFromArgs(args));
+        });
+
+        return command;
+    }
+
+    /// <summary>Port of the <c>batch-run</c> branch of <c>facefusion.py</c>'s <c>cli</c> entry
+    /// point.</summary>
+    private static Command CreateBatchRunCommand()
+    {
+        var command = new Command("batch-run", "run the program in batch mode");
+        var jobsPath = new Option<string>("--jobs-path") { Description = "specify the directory containing jobs" };
+        jobsPath.DefaultValueFactory = _ => ".jobs";
+        command.Add(jobsPath);
+
+        var stepOptions = AttachStepOptions(command, "batch-run");
+
+        command.SetAction(result =>
+        {
+            var manager = new JobManager(result.GetValue(jobsPath) ?? ".jobs");
+
+            if (!manager.InitJobs())
+            {
+                return 1;
+            }
+
+            var args = CollectStepArgs(result, stepOptions);
+            return BatchRunner.ProcessBatch(args, manager, CreateLoggerFromArgs(args));
+        });
+
+        return command;
     }
 
     /// <summary>

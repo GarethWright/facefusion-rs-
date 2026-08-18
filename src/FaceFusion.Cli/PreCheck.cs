@@ -63,4 +63,16 @@ public static class PreCheck
     /// <summary>Python: <c>processors_pre_check</c>.</summary>
     public static bool ProcessorsPreCheck(IEnumerable<IProcessor> processors)
         => processors.All(processor => processor.PreCheck());
+
+    /// <summary>
+    /// Python: <c>processors_pre_check</c>, called with a per-processor pre-check delegate
+    /// rather than an <see cref="IProcessor"/> directly. Several processors' parameterless
+    /// <see cref="IProcessor.PreCheck"/> throws (there is no <c>state_manager</c> to read the
+    /// chosen model from — see e.g. <c>FrameColorizer.Processor.PreCheck</c>'s remarks), so a
+    /// CLI-layer caller that already knows each processor's model from its step args builds one
+    /// closure per processor (see <see cref="FaceFusion.Cli.ProcessorStepFactory.PreCheck"/>)
+    /// and passes those here instead of the <see cref="IProcessor"/> overload above.
+    /// </summary>
+    public static bool ProcessorsPreCheck(IEnumerable<Func<bool>> processorPreChecks)
+        => processorPreChecks.All(check => check());
 }
