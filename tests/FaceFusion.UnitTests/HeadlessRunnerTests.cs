@@ -100,7 +100,7 @@ public sealed class HeadlessRunnerTests
 	}
 
 	[Fact]
-	public void ProcessStepReturnsFalseWhenAnUnsupportedProcessorIsRequested()
+	public void ProcessStepThrowsForAnUnknownProcessorName()
 	{
 		var jobsPath = NewJobsPath();
 
@@ -111,13 +111,12 @@ public sealed class HeadlessRunnerTests
 
 			var args = new Dictionary<string, object?>
 			{
-				["processors"] = new[] { "face_swapper" },
+				["processors"] = new[] { "not_a_real_processor" },
 			};
 
-			// face_swapper has no ProcessorStepFactory wiring yet (needs the full face
-			// pipeline) — ProcessorStepFactory.PreCheck throws NotSupportedException rather
-			// than silently returning a wrong step, matching the assignment's "never return
-			// a silently-wrong step" instruction.
+			// Every processor Python ships is wired now, so this covers the remaining case:
+			// a name ProcessorStepFactory does not know. It throws NotSupportedException
+			// rather than silently returning a wrong step.
 			Assert.Throws<NotSupportedException>(() =>
 				HeadlessRunner.ProcessStep("job-under-test", 0, args, jobManager, new Logger()));
 		}

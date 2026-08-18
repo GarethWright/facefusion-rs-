@@ -7,10 +7,9 @@ namespace FaceFusion.UnitTests;
 
 /// <summary>
 /// Port-adjacent coverage for <see cref="ProcessorStepFactory"/> and
-/// <see cref="FacePipelineFactory"/> — Phase 6's face-pipeline processor wiring
-/// (<c>background_remover</c>, <c>face_debugger</c>) plus the still-unsupported names
-/// (<c>face_swapper</c> and everything after it — see <see cref="ProcessorStepFactory"/>'s
-/// class remarks for exactly why each is not wired).
+/// <see cref="FacePipelineFactory"/> — Phase 6's processor wiring. All eleven of Python's
+/// processor modules are now recognised; see <see cref="ProcessorStepFactory"/>'s class
+/// remarks for how each was verified against the real Python CLI.
 /// </summary>
 [Collection("NativeInference")]
 public sealed class ProcessorStepFactoryTests
@@ -72,31 +71,84 @@ public sealed class ProcessorStepFactoryTests
 		=> Path.Combine(Path.GetTempPath(), $"facefusion-processor-step-factory-jobs-{Guid.NewGuid():N}");
 
 	// -----------------------------------------------------------------
-	// Unsupported processors — "never return a silently-wrong step"
+	// Processor-name coverage — every module Python ships must be recognised
 	// -----------------------------------------------------------------
 
-	[Theory]
-	[InlineData("face_swapper")]
-	[InlineData("age_modifier")]
-	[InlineData("expression_restorer")]
-	[InlineData("deep_swapper")]
-	[InlineData("face_editor")]
-	[InlineData("lip_syncer")]
-	[InlineData("face_enhancer")]
-	[InlineData("frame_enhancer")]
-	[InlineData("not_a_real_processor")]
-	public void PreCheckThrowsNotSupportedForEveryProcessorNotYetWired(string processorName)
+	/// <summary>Every directory under <c>facefusion/processors/modules/</c>, i.e. exactly the
+	/// set <c>--processors</c> accepts. Hardcoded rather than read off disk so the assertion
+	/// still means something in CI, where the Python tree is not guaranteed to be present;
+	/// <see cref="WiredProcessorsMatchThePythonModuleDirectory"/> catches drift when it
+	/// is.</summary>
+	public static readonly string[] PythonProcessorNames =
 	{
-		Assert.Throws<NotSupportedException>(() => ProcessorStepFactory.PreCheck(processorName, new Dictionary<string, object?>()));
+		"age_modifier", "background_remover", "deep_swapper", "expression_restorer", "face_debugger",
+		"face_editor", "face_enhancer", "face_swapper", "frame_colorizer", "frame_enhancer", "lip_syncer",
+	};
+
+	public static TheoryData<string> ProcessorNames()
+	{
+		var data = new TheoryData<string>();
+
+		foreach (var name in PythonProcessorNames)
+		{
+			data.Add(name);
+		}
+
+		return data;
 	}
 
+	/// <summary>
+	/// PreCheck must recognise every processor. It returns false when the model files are
+	/// absent (which is the normal case in CI) — what must never happen is
+	/// <see cref="NotSupportedException"/>, which would mean the name is unwired.
+	/// </summary>
 	[Theory]
-	[InlineData("face_swapper")]
-	[InlineData("age_modifier")]
-	[InlineData("not_a_real_processor")]
-	public void BuildThrowsNotSupportedForEveryProcessorNotYetWired(string processorName)
+	[MemberData(nameof(ProcessorNames))]
+	public void PreCheckRecognisesEveryPythonProcessor(string processorName)
 	{
-		Assert.Throws<NotSupportedException>(() => ProcessorStepFactory.Build(processorName, new Dictionary<string, object?>()));
+		var exception = Record.Exception(() => ProcessorStepFactory.PreCheck(processorName, new Dictionary<string, object?>()));
+
+		Assert.False(exception is NotSupportedException, $"'{processorName}' is not wired into ProcessorStepFactory.PreCheck");
+	}
+
+	/// <summary>An unknown name is still a named failure rather than a silently-wrong step.</summary>
+	[Fact]
+	public void PreCheckThrowsNotSupportedForAnUnknownProcessor()
+	{
+		var exception = Assert.Throws<NotSupportedException>(
+			() => ProcessorStepFactory.PreCheck("not_a_real_processor", new Dictionary<string, object?>()));
+		Assert.Contains("not_a_real_processor", exception.Message);
+	}
+
+	[Fact]
+	public void BuildThrowsNotSupportedForAnUnknownProcessor()
+	{
+		Assert.Throws<NotSupportedException>(
+			() => ProcessorStepFactory.Build("not_a_real_processor", new Dictionary<string, object?>()));
+	}
+
+	/// <summary>
+	/// Drift guard: if Python gains or loses a processor module, this fails rather than the
+	/// port silently accepting a stale list. Skips when the Python tree is not checked out.
+	/// </summary>
+	[Fact]
+	public void WiredProcessorsMatchThePythonModuleDirectory()
+	{
+		var repoRoot = FindRepoRoot();
+		var modulesPath = repoRoot is null ? null : Path.Combine(repoRoot, "facefusion", "processors", "modules");
+
+		if (modulesPath is null || !Directory.Exists(modulesPath))
+		{
+			return; // the Python tree is not present — nothing to compare against
+		}
+
+		var pythonNames = Directory.GetDirectories(modulesPath)
+			.Select(Path.GetFileName)
+			.Where(name => name is not null && !name.StartsWith("__", StringComparison.Ordinal))
+			.OrderBy(name => name, StringComparer.Ordinal)
+			.ToArray();
+
+		Assert.Equal(PythonProcessorNames.OrderBy(name => name, StringComparer.Ordinal).ToArray(), pythonNames);
 	}
 
 	[Fact]
@@ -104,8 +156,8 @@ public sealed class ProcessorStepFactoryTests
 	{
 		// face_debugger needs a FacePipelineFactory.Resources instance (see
 		// ProcessorStepFactory.Build's remarks) — omitting it is a caller bug, not an
-		// unsupported-processor situation, so this is a different exception type than the
-		// NotSupportedException every genuinely-unwired processor throws.
+		// unknown-processor situation, so this is a different exception type than the
+		// NotSupportedException an unrecognised name throws.
 		var exception = Assert.Throws<InvalidOperationException>(
 			() => ProcessorStepFactory.Build("face_debugger", new Dictionary<string, object?>()));
 		Assert.Contains("FacePipelineFactory.Resources", exception.Message);
