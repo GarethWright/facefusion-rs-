@@ -2,32 +2,24 @@
 
 Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as phases land.
 
-**Current state: Phases 0–4 complete, Phase 5 in progress.** Clean build with 0 warnings
-and 0 errors; **893 tests passing** (730 unit + 163 parity), 3 skipped.
+**Current state: Phases 0–5 complete, Phase 6 substantially done.**
 
-**Phase 5 is complete: all 11 processors ported**, plus the `IProcessor` foundation,
-`pixel_boost`, `live_portrait`, the audio layer and `voice_extractor`. Phase 6 has the
-jobs subsystem done and the workflow layer in progress.
+| Phase | State |
+| --- | --- |
+| 0 Foundations + parity harness | complete |
+| 1 Config, settings, logging, i18n | complete |
+| 2 Media plumbing | complete, verified end to end |
+| 3 Inference layer | complete (CPU verified; GPU providers unverified — no GPU here) |
+| 4 Face pipeline | complete, verified against real ONNX inference |
+| 5 Processors | complete — 11/11 plus the audio layer |
+| 6 Workflows, jobs, CLI | workflows and jobs complete; CLI runs the job commands and interoperates with Python. `headless-run`/`batch-run` not yet wired to the workflow |
+| 7 UI (Blazor) | **not started** |
+| 8 Streaming / webcam | **not started** |
+| 9 Performance tuning | **not started** (deliberately sequenced after parity) |
 
-One processor could not be verified against real inference: **`deep_swapper`'s `.dfm`
-models are hosted exclusively on Hugging Face**, with no GitHub mirror unlike every other
-model in the project, and this environment's network policy blocks `huggingface.co` and
-`hf-mirror.com` (403 at CONNECT — independently confirmed, a policy denial rather than a
-transient failure). So its preprocessing is verified exactly (`PrepareCropFrame`'s model
-input matched Python at rtol=atol=0, and the OpenCV stages to 1e-5) but `Forward()` has no
-real-model fixture. **This is the one place in the port where an ONNX path is untested
-against real weights**, and it should be re-run wherever Hugging Face is reachable.
+Phases 7 and 8 are the plan's own post-v1 items: the UI is 4,444 lines of Gradio with no
+mechanical translation and was estimated at 4–8 weeks, streaming at 2–3.
 
-Phase 4 is verified against **real ONNX inference**, not reimplementations: the models
-download automatically via each module's `pre_check()`, so the C# face pipeline is compared
-against the actual Python pipeline running the same weights on the same image.
-
-The Phase 2 milestone is now **verified end to end**, not just in code: ffmpeg is
-installed, the example media are present, and `Phase2MilestoneTests` extracts frames from
-a real video, writes them back, remerges and restores audio. Phase 3 (execution providers,
-inference pool, ONNX model reader) is done, including a real ONNX Runtime session running
-CPU inference through the `OrtValue` zero-copy path. Phase 4 has `face_helper` ported with
-53 tests, every one against real numpy/cv2 ground truth.
 
 ## Environment: the real Python pipeline now runs here
 
