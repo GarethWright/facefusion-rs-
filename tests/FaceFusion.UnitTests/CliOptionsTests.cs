@@ -52,24 +52,35 @@ public sealed class CliOptionsTests
         }
     }
 
+    /// <summary>
+    /// Compares the generated table against the union of every subcommand's real
+    /// <c>--help</c> output.
+    ///
+    /// An earlier version of this test re-parsed <c>program.py</c> with the same regex the
+    /// generator used, so when that regex proved wrong — it skipped any option declaring a
+    /// short alias first, losing <c>--source-paths</c>, <c>--target-path</c> and
+    /// <c>--output-path</c> — the test agreed with the bug instead of catching it. It also
+    /// could not see processor options, which each processor registers itself rather than
+    /// declaring in <c>program.py</c>. <c>--help</c> is the surface users actually get, so
+    /// it cannot share a parsing bug with the generator.
+    /// </summary>
     [PythonSourceFact]
-    public void MatchesProgramPy()
+    public void MatchesPythonHelpOutput()
     {
-        var repoRoot = FindRepoRoot();
-        var programPath = Path.Combine(repoRoot, "facefusion", "program.py");
-
         var script = """
-            import re, sys
-            source = open(sys.argv[1]).read()
-            seen = []
-            for match in re.finditer(r"add_argument\(\s*'(--[a-z0-9-]+)'", source):
-                flag = match.group(1)
-                if flag not in seen:
-                    seen.append(flag)
-            print("\n".join(seen))
+            import re, subprocess, sys
+            commands = sys.argv[1:]
+            flags = set()
+            for command in commands:
+                result = subprocess.run(['python3', 'facefusion.py', command, '--help'],
+                    capture_output=True, text=True, timeout=300)
+                flags |= set(re.findall(r'--[a-z0-9-]+', result.stdout))
+            flags.discard('--help')
+            print("\n".join(sorted(flags)))
             """;
 
-        var pythonFlags = RunPython(script, programPath);
+        var commands = string.Join(" ", CliCommands.FlagsByCommand.Keys);
+        var pythonFlags = RunPython(script, commands);
         Assert.NotNull(pythonFlags);
 
         var expected = pythonFlags!
@@ -78,31 +89,58 @@ public sealed class CliOptionsTests
         var actual = CliOptions.All.Select(option => option.Flag).ToList();
 
         var missing = expected.Except(actual, StringComparer.Ordinal).ToList();
-        var extra = actual.Except(expected, StringComparer.Ordinal).ToList();
 
+        // Only "missing" fails the build. The C# table is the union across every
+        // subcommand, so a flag Python shows on a command not enumerated here would look
+        // "extra" without being wrong; CliCommands is what pins per-command membership.
         Assert.True(
-            missing.Count == 0 && extra.Count == 0,
-            $"CLI options have drifted from program.py. Missing: [{string.Join(", ", missing)}]. " +
-            $"Extra: [{string.Join(", ", extra)}]. Regenerate with " +
-            "python3 tools/parity/generate_cli_options.py");
+            missing.Count == 0,
+            $"CLI options have drifted from the Python CLI. Missing: [{string.Join(", ", missing)}]. " +
+            "Regenerate with python3 tools/parity/generate_cli_options.py");
     }
 
-    private static string? RunPython(string script, string argument)
+    /// <summary>
+    /// Every command's flag set must be a subset of the known options, so a command cannot
+    /// reference a flag the table does not define.
+    /// </summary>
+    [Fact]
+    public void EveryCommandFlagIsADefinedOption()
+    {
+        var defined = CliOptions.All.Select(option => option.Flag).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var (command, flags) in CliCommands.FlagsByCommand)
+        {
+            foreach (var flag in flags)
+            {
+                Assert.True(defined.Contains(flag), $"{command} references undefined option {flag}");
+            }
+        }
+    }
+
+    private static string? RunPython(string script, string arguments)
     {
         var scriptPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".py");
         File.WriteAllText(scriptPath, script);
 
         try
         {
-            using var process = Process.Start(new ProcessStartInfo
+            var startInfo = new ProcessStartInfo
             {
                 FileName = "python3",
-                ArgumentList = { scriptPath, argument },
+                ArgumentList = { scriptPath },
+                // Split on spaces: every value passed here is a command name.
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 WorkingDirectory = FindRepoRoot()
-            });
+            };
+
+            foreach (var argument in arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            using var process = Process.Start(startInfo);
 
             if (process is null)
             {
