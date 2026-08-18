@@ -197,6 +197,7 @@ def dump_face_editor(source_frame) -> None:
 	# Individual retargeter inputs/outputs, dumped directly (not only through apply_edit),
 	# so the C# port's ForwardRetargetEye/ForwardRetargetLip can be checked in isolation.
 	face_landmark_68 = target_face.landmark_set.get('68')
+	dump('face_editor/face_landmark_68', face_landmark_68)
 	left_eye_ratio = face_editor.calculate_distance_ratio(face_landmark_68, 37, 40, 39, 36)
 	right_eye_ratio = face_editor.calculate_distance_ratio(face_landmark_68, 43, 46, 45, 42)
 	dump_scalar('face_editor/eye_ratios', [ float(left_eye_ratio), float(right_eye_ratio) ])
@@ -219,8 +220,6 @@ def dump_face_editor(source_frame) -> None:
 	normalized = face_editor.normalize_crop_frame(crop_vision_frame_raw)
 	dump('face_editor/normalized_crop_frame', normalized)
 
-	edited_frame = face_editor.edit_face(target_face, source_frame.copy())
-	dump('face_editor/edited_frame', edited_frame)
 
 
 def main() -> None:

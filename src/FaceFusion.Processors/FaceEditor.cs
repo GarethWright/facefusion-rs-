@@ -310,7 +310,7 @@ public static class FaceEditor
         return (pitch, yaw, roll, scale, translation, expression, motionPoints);
     }
 
-    /// <summary>Python: <c>forward_retarget_eye</c>. <paramref name="eyeMotionPoints"/> is the flat length-64 input (Python: <c>(1, 64)</c>). Returns the flat length-63 <c>(1, 21, 3)</c> output (batch dim implicit).</summary>
+    /// <summary>Python: <c>forward_retarget_eye</c>. <paramref name="eyeMotionPoints"/> is the flat length-66 input (Python: <c>(1, 66)</c> — 21*3 motion points plus <c>[left_eye_ratio, right_eye_ratio, target_ratio]</c>). Returns the flat length-63 <c>(1, 21, 3)</c> output (batch dim implicit).</summary>
     public static float[] ForwardRetargetEye(InferenceSession eyeRetargeterSession, float[] eyeMotionPoints)
     {
         using var inputOrtValue = OrtValue.CreateTensorValueFromMemory(eyeMotionPoints, new long[] { 1, eyeMotionPoints.Length });

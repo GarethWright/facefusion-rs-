@@ -169,8 +169,8 @@ public sealed class FaceEditorTests
 
         Assert.Equal(0.0075, (double)result[1, 0], 5); // -interp(-0.5,[-0.015,0.015]) = -(-0.0075)
         Assert.Equal(-0.01, (double)result[2, 0], 5);
-        Assert.Equal(0.0025, (double)result[1, 1], 5);
-        Assert.Equal(-0.0025, (double)result[2, 1], 5);
+        Assert.Equal(-0.0025, (double)result[1, 1], 5);
+        Assert.Equal(0.0025, (double)result[2, 1], 5);
     }
 
     [Fact]

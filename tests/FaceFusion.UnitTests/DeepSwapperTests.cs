@@ -39,9 +39,11 @@ public sealed class DeepSwapperTests
         Assert.True(catalog.ContainsKey("mats/billie_eilish_224"));
         Assert.True(catalog.ContainsKey("rumateus/taylor_swift_224"));
 
-        // Python: 79 druuzil + 5 edel + 24 iperov + 7 jen + 17 mats + 26 rumateus (custom/*
-        // entries depend on the local filesystem, so this only asserts a lower bound).
-        Assert.True(catalog.Count >= 79 + 5 + 24 + 7 + 17 + 26);
+        // Python: 82 (druuzil + edel) + 24 iperov + 51 (jen + mats + rumateus) == 157 model_config
+        // tuples (verified against facefusion/processors/modules/deep_swapper/core.py's three
+        // literal model_config.extend([...]) blocks directly). custom/* entries depend on the
+        // local filesystem, so this only asserts a lower bound.
+        Assert.True(catalog.Count >= 82 + 24 + 51);
     }
 
     [Fact]

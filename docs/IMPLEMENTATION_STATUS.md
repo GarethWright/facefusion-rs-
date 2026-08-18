@@ -5,11 +5,18 @@ Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as pha
 **Current state: Phases 0–4 complete, Phase 5 in progress.** Clean build with 0 warnings
 and 0 errors; **893 tests passing** (730 unit + 163 parity), 3 skipped.
 
-Phase 5 has 7 of 11 processors ported (face_swapper, face_enhancer, frame_enhancer,
-face_debugger, frame_colorizer, background_remover) plus the `IProcessor` foundation and
-the audio layer. Still to do: `expression_restorer`, `age_modifier`, `deep_swapper`,
-`face_editor`, `lip_syncer`, and the shared `live_portrait`. Several ported modules still
-lack test files — tracked under Known gaps.
+**Phase 5 is complete: all 11 processors ported**, plus the `IProcessor` foundation,
+`pixel_boost`, `live_portrait`, the audio layer and `voice_extractor`. Phase 6 has the
+jobs subsystem done and the workflow layer in progress.
+
+One processor could not be verified against real inference: **`deep_swapper`'s `.dfm`
+models are hosted exclusively on Hugging Face**, with no GitHub mirror unlike every other
+model in the project, and this environment's network policy blocks `huggingface.co` and
+`hf-mirror.com` (403 at CONNECT — independently confirmed, a policy denial rather than a
+transient failure). So its preprocessing is verified exactly (`PrepareCropFrame`'s model
+input matched Python at rtol=atol=0, and the OpenCV stages to 1e-5) but `Forward()` has no
+real-model fixture. **This is the one place in the port where an ONNX path is untested
+against real weights**, and it should be re-run wherever Hugging Face is reachable.
 
 Phase 4 is verified against **real ONNX inference**, not reimplementations: the models
 download automatically via each module's `pre_check()`, so the C# face pipeline is compared
