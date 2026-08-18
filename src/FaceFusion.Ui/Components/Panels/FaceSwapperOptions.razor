@@ -1,0 +1,97 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/face_swapper_options.py. Two behaviours that panel has
+    and a plain descriptor-driven block would not:
+
+    - the pixel-boost choices depend on the CHOSEN model (Python: update_face_swapper_model
+      rebuilds them from face_swapper_set and resets the value to the first entry), so they
+      are read from FaceSwapper.FaceSwapperPixelBoostChoices per model rather than from the
+      flat descriptor list, which necessarily holds the union of every model's;
+    - the weight slider is hidden for models that have no weight input (Python:
+      has_face_swapper_weight()'s explicit model list).
+*@
+@using FaceFusion.Processors
+@using FaceFusion.Types
+
+@if (State.GetList("processors").Contains("face_swapper"))
+{
+    <section class="ff-panel">
+        <h2>FACE SWAPPER</h2>
+
+        <div class="ff-field">
+            <label for="ff-face-swapper-model">@UiLabels.Humanize("face_swapper_model")</label>
+            <select id="ff-face-swapper-model" value="@ModelName" @onchange="OnModelChanged">
+                @foreach (var choice in UiOptionDescriptors.Get("face_swapper_model").Choices)
+                {
+                    <option value="@choice">@choice</option>
+                }
+            </select>
+        </div>
+
+        <div class="ff-field">
+            <label for="ff-face-swapper-pixel-boost">@UiLabels.Humanize("face_swapper_pixel_boost")</label>
+            <select id="ff-face-swapper-pixel-boost" value="@(State.GetString("face_swapper_pixel_boost") ?? string.Empty)"
+                    @onchange="OnPixelBoostChanged">
+                @foreach (var choice in PixelBoostChoices)
+                {
+                    <option value="@choice">@choice</option>
+                }
+            </select>
+        </div>
+
+        @if (HasWeight)
+        {
+            <OptionSlider StateKey="face_swapper_weight" />
+        }
+    </section>
+}
+
+@code {
+    /// <summary>Python: has_face_swapper_weight()'s literal model list. Transcribed rather than
+    /// derived because Python transcribes it too — it is not computed from the model set.</summary>
+    private static readonly HashSet<string> ModelsWithWeight = new(StringComparer.Ordinal)
+    {
+        "ghost_1_256", "ghost_2_256", "ghost_3_256", "hififace_unofficial_256",
+        "hyperswap_1a_256", "hyperswap_1b_256", "hyperswap_1c_256",
+        "inswapper_128", "inswapper_128_fp16", "simswap_256", "simswap_unofficial_512",
+    };
+
+    private string ModelName => State.GetString("face_swapper_model") ?? "hyperswap_1a_256";
+
+    private bool HasWeight => ModelsWithWeight.Contains(ModelName);
+
+    private IReadOnlyList<string> PixelBoostChoices
+    {
+        get
+        {
+            var model = EnumNames.FromWireName<FaceSwapperModel>(ModelName);
+            return FaceSwapper.FaceSwapperPixelBoostChoices.TryGetValue(model, out var choices)
+                ? choices
+                : Array.Empty<string>();
+        }
+    }
+
+    private void OnPixelBoostChanged(ChangeEventArgs args)
+        => State.SetString("face_swapper_pixel_boost", args.Value?.ToString());
+
+    /// <summary>Python: update_face_swapper_model — changing the model resets pixel boost to the
+    /// first choice of the NEW model, because the old value is usually not in the new list.</summary>
+    private void OnModelChanged(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        State.SetString("face_swapper_model", value);
+
+        var first = PixelBoostChoices.FirstOrDefault();
+
+        if (first is not null)
+        {
+            State.SetString("face_swapper_pixel_boost", first);
+        }
+    }
+}

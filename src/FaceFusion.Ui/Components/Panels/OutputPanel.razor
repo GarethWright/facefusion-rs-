@@ -1,0 +1,32 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/output.py — the output path box plus the result preview.
+    Python defaults the path to ~/Documents when it exists and the temp directory otherwise;
+    the same default is applied here, on first render rather than at import time.
+*@
+@inject UiRunner Runner
+
+<section class="ff-panel">
+    <h2>OUTPUT</h2>
+    <OptionText StateKey="output_path" Placeholder="path to write the result to" />
+
+    @if (Runner.LastOutputPath is { } outputPath)
+    {
+        <p class="ff-ok">last run wrote @outputPath</p>
+    }
+</section>
+
+@code {
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        if (!string.IsNullOrWhiteSpace(State.GetString("output_path")))
+        {
+            return;
+        }
+
+        var documents = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents");
+        State.SetString("output_path", Directory.Exists(documents) ? documents : Path.GetTempPath());
+    }
+}

@@ -1,0 +1,59 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/preview.py plus preview_options.py (the frame slider).
+    Rendering is explicit rather than automatic on every settings change: one preview render
+    opens the full model set and takes seconds on CPU, so re-rendering on each keystroke would
+    make the UI unusable. Python gets away with it by debouncing inside Gradio.
+*@
+@inject UiPreview Preview
+
+<section class="ff-panel">
+    <h2>PREVIEW</h2>
+
+    <div class="ff-field">
+        <label for="ff-preview-frame">PREVIEW FRAME NUMBER <span class="ff-value">@_frameNumber</span></label>
+        <input id="ff-preview-frame" type="number" min="0" value="@_frameNumber"
+               @onchange="OnFrameNumberChanged" />
+    </div>
+
+    <button class="ff-button-primary" disabled="@Preview.IsRendering" @onclick="() => Preview.RenderAsync(_frameNumber)">
+        @(Preview.IsRendering ? "RENDERING…" : "RENDER PREVIEW")
+    </button>
+
+    @if (Preview.LastError is { } error)
+    {
+        <p class="ff-error">@error</p>
+    }
+
+    @if (Preview.ImageDataUri is { } dataUri)
+    {
+        <img class="ff-preview" src="@dataUri" alt="preview frame" />
+    }
+</section>
+
+@code {
+    private int _frameNumber;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Preview.Changed += OnChanged;
+        _frameNumber = State.GetInt("reference_frame_number");
+    }
+
+    public override void Dispose()
+    {
+        Preview.Changed -= OnChanged;
+        base.Dispose();
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnFrameNumberChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value >= 0)
+        {
+            _frameNumber = value;
+        }
+    }
+}

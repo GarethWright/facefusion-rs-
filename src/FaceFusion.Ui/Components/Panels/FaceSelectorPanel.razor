@@ -1,0 +1,23 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/face_selector.py. The reference-face controls are only
+    meaningful in 'reference' mode (Python's listen() toggles their visibility on the mode
+    dropdown's change event), so they are conditioned on it here.
+*@
+
+<section class="ff-panel">
+    <h2>FACE SELECTOR</h2>
+    <OptionDropdown StateKey="face_selector_mode" />
+    <OptionDropdown StateKey="face_selector_order" />
+    <OptionDropdown StateKey="face_selector_gender" AllowNone="true" />
+    <OptionDropdown StateKey="face_selector_race" AllowNone="true" />
+    <OptionDropdown StateKey="face_selector_age_start" AllowNone="true" />
+    <OptionDropdown StateKey="face_selector_age_end" AllowNone="true" />
+
+    @if (State.GetString("face_selector_mode") == "reference")
+    {
+        <OptionText StateKey="reference_face_position" />
+        <OptionSlider StateKey="reference_face_distance" />
+        <OptionText StateKey="reference_frame_number" />
+    }
+</section>

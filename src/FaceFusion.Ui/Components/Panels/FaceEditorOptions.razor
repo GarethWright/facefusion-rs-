@@ -1,0 +1,28 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/face_editor_options.py. Python shows this block only
+    while 'face_editor' is in the processors checkbox group (its listen() toggles visibility
+    on that group's change event); the same condition is expressed directly here.
+*@
+
+@if (State.GetList("processors").Contains("face_editor"))
+{
+    <section class="ff-panel">
+        <h2>FACE EDITOR</h2>
+        <OptionDropdown StateKey="face_editor_model" />
+        <OptionSlider StateKey="face_editor_eyebrow_direction" />
+        <OptionSlider StateKey="face_editor_eye_gaze_horizontal" />
+        <OptionSlider StateKey="face_editor_eye_gaze_vertical" />
+        <OptionSlider StateKey="face_editor_eye_open_ratio" />
+        <OptionSlider StateKey="face_editor_lip_open_ratio" />
+        <OptionSlider StateKey="face_editor_mouth_grim" />
+        <OptionSlider StateKey="face_editor_mouth_pout" />
+        <OptionSlider StateKey="face_editor_mouth_purse" />
+        <OptionSlider StateKey="face_editor_mouth_smile" />
+        <OptionSlider StateKey="face_editor_mouth_position_horizontal" />
+        <OptionSlider StateKey="face_editor_mouth_position_vertical" />
+        <OptionSlider StateKey="face_editor_head_pitch" />
+        <OptionSlider StateKey="face_editor_head_yaw" />
+        <OptionSlider StateKey="face_editor_head_roll" />
+    </section>
+}

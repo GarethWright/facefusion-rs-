@@ -1,0 +1,37 @@
+@inherits UiComponentBase
+@*
+    Gradio: gradio.CheckboxGroup(label = ..., value = ..., choices = ...). Selection order
+    follows the descriptor's choice order rather than click order — see
+    UiState.ToggleListValue.
+*@
+
+<div class="ff-field">
+    <label>@Label</label>
+    <div class="ff-checkboxes">
+        @foreach (var choice in _descriptor.Choices)
+        {
+            var isSelected = _selected.Contains(choice);
+            <label class="ff-checkbox">
+                <input type="checkbox" checked="@isSelected"
+                       @onchange="e => State.ToggleListValue(StateKey, choice, (bool?)e.Value == true)" />
+                <span>@choice</span>
+            </label>
+        }
+    </div>
+</div>
+
+@code {
+    private UiOptionDescriptor _descriptor = default!;
+    private HashSet<string> _selected = new(StringComparer.Ordinal);
+
+    [Parameter, EditorRequired] public string StateKey { get; set; } = string.Empty;
+    [Parameter] public string? Title { get; set; }
+
+    private string Label => Title ?? UiLabels.Humanize(StateKey);
+
+    protected override void OnParametersSet()
+    {
+        _descriptor = UiOptionDescriptors.Get(StateKey);
+        _selected = State.GetList(StateKey).ToHashSet(StringComparer.Ordinal);
+    }
+}

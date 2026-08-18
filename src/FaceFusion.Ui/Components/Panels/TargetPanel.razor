@@ -1,0 +1,14 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/target.py. Takes a path rather than an upload for the
+    reason SourcePanel's remarks give.
+*@
+
+<section class="ff-panel">
+    <h2>TARGET</h2>
+    <OptionText StateKey="target_path" Placeholder="path to the target image or video" />
+    @if (State.GetString("target_path") is { Length: > 0 } path)
+    {
+        <p class="@(File.Exists(path) ? "ff-ok" : "ff-error")">@(File.Exists(path) ? "found" : "MISSING") — @path</p>
+    }
+</section>

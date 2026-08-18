@@ -266,6 +266,113 @@ public static class HeadlessRunner
 		}
 	}
 
+	/// <summary>
+	/// Python: <c>facefusion/uis/components/preview.py</c>'s <c>process_preview_frame</c> —
+	/// runs the configured processor chain over exactly one frame and hands back the result,
+	/// so the UI can show what a run would produce without doing the run.
+	///
+	/// <para>
+	/// It lives here, next to <see cref="ConditionalProcess"/>, rather than in the UI project,
+	/// because it must build its steps through the same <see cref="ProcessorStepFactory"/> calls
+	/// with the same argument bag. A preview assembled separately would be free to disagree with
+	/// the run it is previewing, which is the whole failure this method exists to avoid.
+	/// </para>
+	///
+	/// <para>Returns null when the target is missing or unreadable. The caller owns the
+	/// returned <see cref="OpenCvSharp.Mat"/>.</para>
+	/// </summary>
+	public static OpenCvSharp.Mat? RenderPreviewFrame(IReadOnlyDictionary<string, object?> args, int frameNumber, Logger logger)
+	{
+		var targetPath = StepArgsReader.GetStringOrNull(args, "target_path");
+
+		if (!FileSystem.IsFile(targetPath))
+		{
+			return null;
+		}
+
+		var isVideo = FileSystem.IsVideo(targetPath);
+		var workflowMode = isVideo ? WorkflowMode.ImageToVideo : WorkflowMode.ImageToImage;
+		var processorNames = StepArgsReader.GetStringList(args, "processors", new[] { "face_swapper" });
+
+		var built = new List<ProcessorStepFactory.BuiltStep>();
+		FacePipelineFactory.Resources? faceResources = null;
+		using var voiceExtraction = new VoiceExtraction(
+			EnumNames.FromWireName<VoiceExtractorModel>(StepArgsReader.GetString(args, "voice_extractor_model", "kim_vocal_2")));
+
+		try
+		{
+			foreach (var name in processorNames)
+			{
+				if (!ProcessorStepFactory.PreCheck(name, args))
+				{
+					logger.Error($"processor '{name}' pre-check failed — its model files are missing or unreadable", ModuleName);
+					return null;
+				}
+			}
+
+			if (processorNames.Any(FacePipelineFactory.Requires))
+			{
+				faceResources = FacePipelineFactory.Build(args);
+			}
+
+			foreach (var name in processorNames)
+			{
+				built.Add(ProcessorStepFactory.Build(name, args, faceResources));
+			}
+
+			var context = BuildRunContext(args, workflowMode, targetPath!, voiceExtraction);
+			var processorSteps = built.Select(b => b.Step).ToArray();
+
+			var targetVisionFrames = isVideo
+				? FaceFusion.Vision.Vision.SelectVideoFrames(targetPath!, frameNumber, StepArgsReader.GetInt(args, "target_frame_amount", 2))
+				: ReadSingleImageAsFrames(targetPath!);
+
+			try
+			{
+				var targetVisionFrame = CommonHelper.GetMiddle(targetVisionFrames);
+
+				if (targetVisionFrame is null)
+				{
+					return null;
+				}
+
+				using var tempVisionFrame = targetVisionFrame.Clone();
+				return WorkflowCore.ProcessTempFrame(processorSteps, context, targetVisionFrames, tempVisionFrame, frameNumber);
+			}
+			finally
+			{
+				foreach (var frame in targetVisionFrames)
+				{
+					frame.Dispose();
+				}
+			}
+		}
+		catch (Exception exception)
+		{
+			logger.Error($"{exception.GetType().Name}: {exception.Message}", ModuleName);
+			logger.Debug(exception.ToString(), ModuleName);
+			return null;
+		}
+		finally
+		{
+			foreach (var step in built)
+			{
+				step.Resource.Dispose();
+			}
+
+			faceResources?.Dispose();
+		}
+	}
+
+	/// <summary>An image target has no frame window to select, so the "frames around this one"
+	/// list every processor's <c>process_frame</c> expects is the single image — matching what
+	/// <c>ToImage</c> does for a real image run.</summary>
+	private static IReadOnlyList<OpenCvSharp.Mat> ReadSingleImageAsFrames(string imagePath)
+	{
+		var visionFrame = FaceFusion.Vision.Vision.ReadStaticImage(imagePath);
+		return visionFrame is null ? Array.Empty<OpenCvSharp.Mat>() : new[] { visionFrame };
+	}
+
 	private static WorkflowRunContext BuildRunContext(IReadOnlyDictionary<string, object?> args, WorkflowMode workflowMode, string targetPath, VoiceExtraction voiceExtraction)
 	{
 		var trimFrameStart = StepArgsReader.GetIntOrNull(args, "trim_frame_start");

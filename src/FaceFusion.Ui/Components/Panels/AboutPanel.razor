@@ -1,0 +1,11 @@
+@inherits UiComponentBase
+@using FaceFusion.Core
+@*
+    Gradio: facefusion/uis/components/about.py. Python renders the name/version as a link
+    button plus one randomly chosen fundraising link; only the first is carried over — the
+    rotating promo link is not part of the application's behaviour.
+*@
+<section class="ff-panel ff-panel-about">
+    <h1>@Metadata.Get("name") @Metadata.Get("version")</h1>
+    <p>@Metadata.Get("description")</p>
+</section>

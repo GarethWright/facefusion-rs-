@@ -1,0 +1,30 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/source.py — gradio.File(file_count = 'multiple').
+
+    Deliberate divergence: Gradio uploads files into a server-side temp directory and stores
+    the uploaded paths. FaceFusion runs on the machine that holds the media (the plan's §6
+    "open localhost in a browser" deployment story), so this takes filesystem paths directly
+    instead of copying gigabytes of video through the SignalR circuit to a temp copy of a file
+    that is already on the same disk. Existence is validated here so a typo fails at the field
+    rather than at the run.
+*@
+
+<section class="ff-panel">
+    <h2>SOURCE</h2>
+    <div class="ff-field">
+        <label for="ff-source-paths">SOURCE PATHS</label>
+        <input id="ff-source-paths" type="text" value="@(State.GetString("source_paths") ?? string.Empty)"
+               placeholder="space-separated paths to source images and/or audio"
+               @onchange="OnSourcePathsChanged" />
+    </div>
+    @foreach (var path in State.GetList("source_paths"))
+    {
+        <p class="@(File.Exists(path) ? "ff-ok" : "ff-error")">@(File.Exists(path) ? "found" : "MISSING") — @path</p>
+    }
+</section>
+
+@code {
+    private void OnSourcePathsChanged(ChangeEventArgs args)
+        => State.SetString("source_paths", args.Value?.ToString());
+}

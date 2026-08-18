@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "FaceFusion.Ui": {
+      "commandName": "Project",
+      "applicationUrl": "http://localhost:7860",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/terminal.py. UiTerminal is the TextWriter the run's
+    Logger writes to, so this pane shows the identical stream the CLI prints — see UiTerminal's
+    class remarks.
+*@
+@inject UiTerminal Terminal
+
+<section class="ff-panel ff-panel-terminal">
+    <h2>TERMINAL</h2>
+    <button class="ff-button-small" @onclick="Terminal.Clear">CLEAR</button>
+    <pre class="ff-terminal">@string.Join('\n', Terminal.Snapshot())</pre>
+</section>
+
+@code {
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Terminal.LineWritten += OnLineWritten;
+    }
+
+    public override void Dispose()
+    {
+        Terminal.LineWritten -= OnLineWritten;
+        base.Dispose();
+    }
+
+    // The log line is written on a worker thread; InvokeAsync marshals the re-render back
+    // onto the circuit's synchronisation context, which Blazor requires.
+    private void OnLineWritten() => _ = InvokeAsync(StateHasChanged);
+}

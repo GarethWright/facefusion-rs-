@@ -1,0 +1,17 @@
+@inherits UiComponentBase
+@* Gradio: gradio.Checkbox, for a store_true flag. *@
+
+<div class="ff-field ff-field-inline">
+    <label class="ff-checkbox">
+        <input type="checkbox" checked="@State.GetFlag(StateKey)"
+               @onchange="e => State.SetFlag(StateKey, (bool?)e.Value == true)" />
+        <span>@Label</span>
+    </label>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string StateKey { get; set; } = string.Empty;
+    [Parameter] public string? Title { get; set; }
+
+    private string Label => Title ?? UiLabels.Humanize(StateKey);
+}
