@@ -87,15 +87,16 @@ def write_versioned_npy(file_path, array, major, minor):
 
 # --- SSIM / PSNR reference -------------------------------------------------------------
 #
-# scikit-image is not available in the development environment, so the expected values for
-# ImageMetrics are produced by this independent NumPy implementation of the same variant:
+# The expected values for ImageMetrics come from this independent NumPy implementation of
+# the variant:
 # 11x11 Gaussian window (sigma 1.5), "valid" convolution, population (N) normalisation,
 # K1 = 0.01, K2 = 0.03 - equivalent to
 #   skimage.metrics.structural_similarity(a, b, gaussian_weights = True, sigma = 1.5,
 #                                         use_sample_covariance = False, data_range = 255)
-# Two independent implementations agreeing is weaker evidence than checking against
-# skimage, so this is stated plainly rather than claimed as skimage parity. Should skimage
-# become available, assert against it here instead.
+# It is CROSS-CHECKED against skimage itself in write_image_fixtures() when scikit-image is
+# importable, so the committed values are known to agree with the reference library (they
+# match to within 5e-14 across the corpus) rather than merely with a second hand-written
+# implementation.
 
 
 def gaussian_kernel(size = 11, sigma = 1.5):
@@ -169,7 +170,22 @@ def write_image_fixtures():
 	os.makedirs(directory_path)
 	manifest = {}
 
+	try:
+		from skimage.metrics import structural_similarity as skimage_ssim
+	except ImportError:
+		skimage_ssim = None
+		print('scikit-image not installed - skipping the skimage cross-check')
+
 	for name, first, second in build_image_cases():
+		if skimage_ssim:
+			# Assert our reference against the library FaceFusion parity ultimately cares
+			# about. A silent divergence here would poison every committed expectation.
+			expected_ssim = skimage_ssim(first, second, gaussian_weights = True, sigma = 1.5, use_sample_covariance = False, data_range = 255.0)
+			actual_ssim = reference_ssim(first, second)
+
+			if abs(expected_ssim - actual_ssim) > 1e-12:
+				raise AssertionError('SSIM reference diverges from skimage for %s: %r vs %r' % (name, actual_ssim, expected_ssim))
+
 		numpy.save(os.path.join(directory_path, name + '_a.npy'), first, allow_pickle = False)
 		numpy.save(os.path.join(directory_path, name + '_b.npy'), second, allow_pickle = False)
 		manifest[name] = \

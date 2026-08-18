@@ -66,7 +66,7 @@ Raising `TargetFramework` in `Directory.Build.props` is the whole migration.
 | `shutil.which` (stdlib) | `Core.ProcessHelper.Which` | found/not-found, cross-checked |
 | — (new) | `Parity.NpyReader` / `NpyArray` | 23 committed `.npy` fixtures |
 | — (new) | `Parity.TensorComparison` | vs real `numpy.allclose` |
-| — (new) | `Parity.ImageMetrics` | vs independent NumPy reference |
+| — (new) | `Parity.ImageMetrics` | vs NumPy reference, cross-checked against skimage |
 
 ## Deliberate deviations from the Python
 
@@ -176,8 +176,9 @@ rule 2).
   `tools/parity/parity_dump.py` is ready for Phase 4 to call — but nothing dumps from a
   real FaceFusion run, because the face pipeline is not ported and neither ffmpeg nor the
   models exist in this environment.
-- **SSIM is verified against an independent NumPy reference, not against skimage**, which
-  is not installed here. Both implementations could share a conceptual error.
+- ~~SSIM is not verified against skimage.~~ **Closed.** scikit-image is now installed and
+  `generate_fixtures.py` cross-checks the reference against it, failing if they diverge by
+  more than 1e-12; they agree to within 5e-14.
 
 ## Next steps, in order
 

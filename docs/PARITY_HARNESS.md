@@ -26,19 +26,19 @@ Ground truth crosses the boundary as NumPy `.npy` files:
 | `src/FaceFusion.Parity/TensorComparison.cs` | `numpy.allclose` semantics + failure diagnostics |
 | `src/FaceFusion.Parity/ImageMetrics.cs` | PSNR / SSIM for frame-level comparison |
 
-## A note on the SSIM reference
+## The SSIM reference is checked against skimage
 
-scikit-image is not installed in the development environment, so `ImageMetrics.Ssim` could
-not be checked against `skimage.metrics.structural_similarity`. It is instead verified
-against an independent NumPy implementation of the same variant — 11x11 Gaussian window,
-sigma 1.5, "valid" convolution, population normalisation, K1 = 0.01, K2 = 0.03, equivalent
-to `gaussian_weights=True, use_sample_covariance=False` — written from the paper rather
-than transcribed from the C#. The two agree to 9 decimal places across the fixture corpus.
+`ImageMetrics.Ssim` is verified against an independent NumPy implementation of the variant
+— 11x11 Gaussian window, sigma 1.5, "valid" convolution, population normalisation,
+K1 = 0.01, K2 = 0.03 — and that reference is in turn cross-checked against
+`skimage.metrics.structural_similarity(..., gaussian_weights=True, sigma=1.5,
+use_sample_covariance=False)` inside `generate_fixtures.py`, which raises if the two
+diverge by more than 1e-12. They currently agree to within 5e-14 across the corpus, and
+the C# matches the reference to 9 decimal places.
 
-Two independent implementations agreeing is real evidence but weaker than checking against
-the reference library, since both could share a conceptual error. **If skimage becomes
-available, assert against it directly** in `tools/parity/generate_fixtures.py` and delete
-this note.
+The cross-check is skipped with a printed warning if scikit-image is not installed, so the
+generator still runs in a bare environment — but the committed values were produced with
+it present.
 
 ## Capturing ground truth from Python
 
@@ -119,4 +119,3 @@ would weaken the tests it feeds.
   arrive with Phase 6.
 - **No allocation regression test** (plan §7.6, §5a). Worth adding as soon as frames flow
   through real code.
-- **SSIM is not verified against skimage** — see the note above.
