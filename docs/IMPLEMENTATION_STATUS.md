@@ -15,7 +15,7 @@ Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as pha
 | 6 Workflows, jobs, CLI | **complete.** All 11 processors wired; 10 verified pixel-for-pixel against the Python CLI, the 11th (`deep_swapper`) blocked by a proxy-inaccessible model host |
 | 7 UI (Blazor) | **complete** for the `default` layout — renders, runs jobs, previews frames; output byte-identical to the CLI's |
 | 8 Streaming / webcam | **complete** — `Streamer`, `CameraManager`, the `webcam` layout, and the UDP sink, all verified end to end |
-| 9 Performance tuning | **not started** (deliberately sequenced after parity) |
+| 9 Performance tuning | the OOM defect is diagnosed and fixed (see below); broader tuning still open |
 
 Phases 7 and 8 are the plan's own post-v1 items. Both are now done, in the scope §6 itself
 sets: "`default` is the product; `benchmark` and `jobs` duplicate CLI functionality and can be
@@ -347,21 +347,62 @@ on the same input and the outputs compared.** Anything else keeps its named
 assembled pipeline had never once executed — which is how the `PixelBoost` dtype defect
 survived to be found here.
 
-## Open defect: memory scales badly with execution_thread_count
+## The memory defect: diagnosed, measured, and fixed
 
-`age_modifier` on **8 frames of a 426x226 clip** was killed by the OOM killer at
-**~11.7 GB RSS** (`dmesg`: `anon-rss:11669352kB`). The same run with
-`--execution-thread-count 1` completes and produces output matching Python at 43.3 dB, so
-this is not a correctness bug — the per-frame footprint is simply enormous and multiplies
-by the thread count. Python survives the same run at the same default of 8 threads.
+`age_modifier` on **8 frames of a 426x226 clip** used to be killed by the OOM killer. It now
+completes. Peak resident set, measured by sampling `VmHWM`:
 
-This is the failure plan §5a predicted, and it matters more than the test suite suggests:
-~1.5 GB per in-flight frame on a tiny clip makes any real 1080p job impossible. Nothing in
-the suite catches it because tests run few frames at low concurrency.
+| `--execution-thread-count` | C# before | Python | C# after |
+| --- | --- | --- | --- |
+| 1 | 4743 MB | 4674 MB | — |
+| 2 | 7882 MB | 4811 MB | — |
+| 4 | 11705 MB, **killed** | 5113 MB | — |
+| 8 (default) | >11.7 GB, **killed** | 5548 MB | **6355 MB, completes** |
 
-Worth investigating first: whether concurrent `OrtValue`/`Mat` allocations are being held
-until GC rather than disposed promptly, and whether ONNX Runtime's arena allocator is being
-defeated by per-run allocation. The plan's §5b IO-binding work is the likely remedy.
+**It was not the large-object heap.** The plan's §5a predicted a managed/LOH problem; an
+instrumented run disproved that — the managed heap stayed between 50 MB and 260 MB while the
+resident set went from 4.7 GB to 7.8 GB. Every extra byte was native.
+
+**It was ONNX Runtime activation memory, and it is inherent to the model.** `fran` is a
+1024x1024 U-Net; one concurrent run of it costs ~2.9 GB. A standalone Python script that loads
+the same file and runs it twice concurrently reproduces this exactly — 1756 MB for one run,
+4619 MB for two — so this is ORT's behaviour, not the port's.
+
+Four hypotheses were implemented and measured before any of them was believed. All four were
+wrong, and none is in the tree:
+
+| Tried | Result |
+| --- | --- |
+| `EnableCpuMemArena = false` | 11945 MB, still killed |
+| `IntraOpNumThreads = 1` | unchanged |
+| Workstation GC (`DOTNET_gcServer=0`) | 12348 MB, worse |
+| Dedicated long-lived worker threads instead of `Task.Run` | unchanged |
+
+**The concurrency was buying nothing.** Eight frames took 116 s at one thread and 113 s at two
+(Python: 119 s and 118 s). A model this size already saturates the cores through ORT's own
+intra-op parallelism, so running whole frames concurrently multiplied peak memory for no
+throughput at all. Capping is not a trade-off here; it is free.
+
+**The fix** is `ToVideo.FrameMemoryBudget`: start at one frame in flight, double while the
+resident set stays under half the machine's memory, and back off above three quarters.
+`--execution-thread-count` keeps its meaning as the upper bound; the ramp only ever stays at or
+below it, and logs a warning when it settles lower. This diverges from Python, which always
+uses `ThreadPoolExecutor(max_workers = execution_thread_count)` — reproducing that faithfully
+reproduces a crash.
+
+Two details worth keeping, both from measurement rather than reasoning:
+
+- **A per-frame cost estimate was tried first and rejected.** Measuring the first frame's
+  resident-set delta and dividing the remaining memory by it underestimates badly: it read
+  1623 MB where a second concurrent frame really costs ~2.9 GB, allowed 4 in flight, and peaked
+  at 9404 MB against a 10247 MB limit. Surviving by 8% is not surviving.
+- **The ramp doubles rather than increments.** Incrementing cost a measured 32% on a 16-frame
+  `frame_colorizer` run (17.7 s to 23.4 s) purely in ramp-up. Doubling brings that back to
+  18.7 s.
+
+Output is unaffected: a 16-frame `frame_colorizer` run before and after the change is
+byte-identical (PSNR inf, max difference 0), and `age_modifier` still matches Python at
+43.35 dB.
 
 ## Silent failures in the CLI were themselves a defect
 

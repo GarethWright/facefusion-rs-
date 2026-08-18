@@ -348,7 +348,11 @@ public static class ToVideo
         VisionHelper.ReadStaticVideoFrame(context.TargetPath, context.ReferenceFrameNumber)?.Dispose();
 
         var frameNumbers = Enumerable.Range(trimFrameStart, trimFrameEnd - trimFrameStart).ToList();
-        var maxInFlight = Math.Max(1, executionThreadCount);
+        var requestedInFlight = Math.Max(1, executionThreadCount);
+        // Start with one frame so the first one's real memory cost can be measured before any
+        // more are launched — see FrameMemoryBudget.
+        var memoryBudget = new FrameMemoryBudget(requestedInFlight, logger);
+        var maxInFlight = 1;
         var window = new Queue<(int FrameNumber, Task<Mat> Task)>();
         var index = 0;
         var completed = 0;
@@ -386,6 +390,7 @@ public static class ToVideo
             using var frame = frameTask.GetAwaiter().GetResult();
             WriteFrameToStream(frame, videoWriter.StandardInput);
             completed++;
+            maxInFlight = memoryBudget.Resolve();
             updateProgress?.Invoke(completed);
         }
 
@@ -572,6 +577,127 @@ public static class ToVideo
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Decides how many frames may be processed at once, by watching what the run actually
+    /// costs rather than trusting <c>execution_thread_count</c> alone.
+    ///
+    /// <para>
+    /// <b>Why this exists — the measurement.</b> <c>age_modifier</c> on 8 frames of a 426x226
+    /// clip was killed by the OOM killer. Peak RSS against <c>--execution-thread-count</c>:
+    /// </para>
+    ///
+    /// <list type="table">
+    /// <item><description>1 thread — 4743 MB (Python: 4674 MB)</description></item>
+    /// <item><description>2 threads — 7882 MB (Python: 4811 MB)</description></item>
+    /// <item><description>4 threads — 11705 MB, killed (Python: 5113 MB)</description></item>
+    /// </list>
+    ///
+    /// <para>
+    /// The growth is entirely native: the managed heap stays under 260 MB throughout, so this
+    /// is not the large-object-heap problem the plan's §5a predicted. It is ONNX Runtime
+    /// activation memory — <c>fran</c> is a 1024x1024 U-Net and one concurrent run of it costs
+    /// ~2.9 GB, which a standalone Python script reproduces exactly (1756 MB for one run,
+    /// 4619 MB for two). Disabling the CPU arena, pinning intra-op threads to one, switching to
+    /// workstation GC, and replacing the thread pool with dedicated long-lived worker threads
+    /// were each measured and each changed nothing.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>And it buys no throughput.</b> Eight frames of the same clip took 116 s at one thread
+    /// and 113 s at two (Python: 119 s and 118 s). A model this size already saturates the
+    /// cores through ORT's own intra-op parallelism, so running whole frames concurrently
+    /// multiplies peak memory for nothing. Capping is therefore not a trade-off here — it is
+    /// free. For a light model (<c>frame_colorizer</c>) the resident set stays far below the
+    /// low-water mark and the ramp doubles to the requested count within the first few frames.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Why a ramp and not a per-frame estimate.</b> The obvious version — measure the first
+    /// frame's cost, divide the remaining memory by it — was implemented and measured first. It
+    /// underestimates: the first frame's resident-set delta was 1623 MB where a second
+    /// concurrent frame really costs ~2.9 GB, so it allowed 4 in flight and peaked at 9404 MB
+    /// against a 10247 MB limit. Surviving by 8% is not surviving. Watching the actual resident
+    /// set after every frame and backing off needs no cost model to be right.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Deliberate divergence from Python,</b> which always uses
+    /// <c>ThreadPoolExecutor(max_workers = execution_thread_count)</c>. Reproducing that
+    /// faithfully reproduces a crash, and the flag's own meaning ("how many frames at once") is
+    /// preserved as the upper bound — the ramp only ever stays at or below it, and says so in
+    /// the log when it settles lower.
+    /// </para>
+    /// </summary>
+    private sealed class FrameMemoryBudget
+    {
+        /// <summary>Grow only while the resident set is below this share of the machine's
+        /// memory, so there is room for the next frame's peak before the growth lands.</summary>
+        private const double GrowBelowFraction = 0.5;
+
+        /// <summary>Back off above this share. Left at 0.75 rather than nearer 1.0 because the
+        /// OOM killer does not warn first, and because a frame already in flight can still grow
+        /// after the check.</summary>
+        private const double ShrinkAboveFraction = 0.75;
+
+        private readonly int _requestedInFlight;
+        private readonly Logger? _logger;
+        private readonly long _availableBytes;
+
+        private int _inFlight = 1;
+        private bool _hasReportedCap;
+
+        public FrameMemoryBudget(int requestedInFlight, Logger? logger)
+        {
+            _requestedInFlight = requestedInFlight;
+            _logger = logger;
+            // Respects a cgroup limit, so this is the container's memory rather than the host's.
+            _availableBytes = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+        }
+
+        /// <summary>Called after each frame is written; returns how many may now be in flight.</summary>
+        public int Resolve()
+        {
+            if (_requestedInFlight == 1 || _availableBytes <= 0)
+            {
+                // Nothing to decide, or no limit reported — honour the request, which is what
+                // every build did before this cap existed.
+                _inFlight = _requestedInFlight;
+                return _inFlight;
+            }
+
+            var residentBytes = Environment.WorkingSet;
+
+            if (residentBytes > _availableBytes * ShrinkAboveFraction && _inFlight > 1)
+            {
+                _inFlight--;
+                Report(residentBytes);
+            }
+            else if (residentBytes < _availableBytes * GrowBelowFraction && _inFlight < _requestedInFlight)
+            {
+                // Doubling, not incrementing: a light processor reaches the requested count in
+                // log2(n) frames instead of n. Incrementing cost a measured 32% on a 16-frame
+                // frame_colorizer run (17.7 s to 23.4 s) purely in ramp-up.
+                _inFlight = Math.Min(_requestedInFlight, _inFlight * 2);
+            }
+
+            return _inFlight;
+        }
+
+        private void Report(long residentBytes)
+        {
+            if (_hasReportedCap)
+            {
+                return;
+            }
+
+            _hasReportedCap = true;
+            _logger?.Warn(
+                $"processing {_inFlight} frame(s) at a time instead of {_requestedInFlight}: " +
+                $"{residentBytes / (1024 * 1024)} MB of the machine's {_availableBytes / (1024 * 1024)} MB is already in use",
+                ModuleName);
         }
     }
 }
