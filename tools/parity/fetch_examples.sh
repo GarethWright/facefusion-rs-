@@ -77,4 +77,10 @@ done
 
 derive target-240p-48khz.mp4 -i "$EXAMPLES_DIR/source.mp3" -i "$EXAMPLES_DIR/target-240p.mp4" -ar 48000
 
+# A single extracted frame, used as an image target by tests/test_job_runner.py.
+derive target-240p.jpg -i "$EXAMPLES_DIR/target-240p.mp4" -vframes 1
+
+# Resampled stereo audio used by tests/test_audio.py.
+derive source-48000khz-2ch.wav -i "$EXAMPLES_DIR/source.mp3" -ar 48000 -ac 2
+
 echo "examples in $EXAMPLES_DIR"
