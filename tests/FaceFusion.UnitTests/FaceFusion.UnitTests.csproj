@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\FaceFusion.Tensors\FaceFusion.Tensors.csproj" />
     <ProjectReference Include="..\..\src\FaceFusion.Core\FaceFusion.Core.csproj" />
     <ProjectReference Include="..\..\src\FaceFusion.Media\FaceFusion.Media.csproj" />
+    <ProjectReference Include="..\..\src\FaceFusion.Vision\FaceFusion.Vision.csproj" />
   </ItemGroup>
 
 </Project>

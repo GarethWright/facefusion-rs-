@@ -7,6 +7,24 @@ Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as pha
 touches ONNX Runtime, OpenCV, or the
 face pipeline yet — those are Phases 3–5 and remain entirely unstarted.
 
+## Library spike: OpenCvSharp and ONNX Runtime both work
+
+The two riskiest bets in the plan were checked before Phase 2 committed to them, and both
+hold in this environment (Ubuntu 24.04 x64, .NET 8):
+
+- **OpenCvSharp4** (`OpenCvSharp4` + `OpenCvSharp4.official.runtime.linux-x64`) restores
+  from NuGet, loads its native library, and `Cv2.Resize(..., InterpolationFlags.Area)`
+  returns correct values. This is the parity-critical path — plan §9.1 chose OpenCvSharp
+  precisely so `WarpAffine`/`Resize` semantics match cv2 exactly.
+- **Microsoft.ML.OnnxRuntime** restores and initialises, reporting
+  `CPUExecutionProvider`. No GPU is present here, so the CUDA/TensorRT provider packages
+  remain unverified — that check belongs on real hardware and is still the open item from
+  plan §3.
+
+One wrinkle: OpenCvSharp4 4.13 ships a Roslyn 4.14 analyzer while SDK 8 runs Roslyn 4.8,
+producing CS9057. With `TreatWarningsAsErrors` that fails the build, so CS9057 is listed
+in `WarningsNotAsErrors` in `Directory.Build.props`. It disappears on a newer SDK.
+
 ## Environment deviation
 
 The plan targets **.NET 10**; this repo currently targets **net8.0**. The SDK CDN
