@@ -84,6 +84,27 @@ Recorded so they are choices rather than drift.
   container lands — that needs `Microsoft.Extensions.DependencyInjection` anyway, at which
   point the abstractions package is no extra cost.
 
+## Open divergences in the Vision port
+
+Documented by the porting agent rather than left silent. Both are recorded here because
+they are the kind of thing that quietly changes output.
+
+- **Video metadata comes from OpenCV's demuxer, not ffprobe.** `vision.py` sources frame
+  counts, fps and resolution from `ffprobe` via `video_manager.py`; `Vision.cs` uses
+  `OpenCvSharp.VideoCapture` properties instead, because neither the ffprobe runner nor
+  the ffmpeg binary existed when it was written. The two demuxers do not always agree on
+  frame count for every container. `Ffprobe.cs` now exists, so this should be rewired —
+  which requires breaking the `ffmpeg.py -> vision.py -> ffprobe.py` cycle, most cleanly
+  with a metadata-provider interface in `FaceFusion.Core` implemented in `FaceFusion.Media`.
+- **`EqualizeFrameColor`'s final cast rounds where NumPy truncates.** `Mat.ConvertTo` to
+  8-bit uses `saturate_cast` (rounds); NumPy's `.astype(uint8)` truncates toward zero. An
+  off-by-one per channel. Being fixed to match NumPy, per conventions rule 1.
+
+A third difference is deliberate and should stay: `ReadStaticImage`/`ReadStaticVideoFrame`
+return a `Clone()` from their cache, where Python's `lru_cache` hands back the same array
+object to every caller. Reproducing Python's aliasing is unsafe under `Mat` disposal — a
+caller disposing "their" frame would corrupt the cache for everyone.
+
 ## Parity defects found and fixed
 
 Each of these was caught by a test or by the de-duplication pass rather than by reading

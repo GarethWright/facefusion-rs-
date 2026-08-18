@@ -4,6 +4,7 @@
     <ProjectReference Include="..\FaceFusion.Types\FaceFusion.Types.csproj" />
     <ProjectReference Include="..\FaceFusion.Core\FaceFusion.Core.csproj" />
     <ProjectReference Include="..\FaceFusion.Tensors\FaceFusion.Tensors.csproj" />
+    <ProjectReference Include="..\FaceFusion.Vision\FaceFusion.Vision.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
