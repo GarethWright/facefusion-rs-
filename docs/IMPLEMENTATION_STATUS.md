@@ -12,7 +12,7 @@ Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as pha
 | 3 Inference layer | complete (CPU verified; GPU providers unverified — no GPU here) |
 | 4 Face pipeline | complete, verified against real ONNX inference |
 | 5 Processors | complete — 11/11 plus the audio layer |
-| 6 Workflows, jobs, CLI | workflows, jobs and CLI complete; `headless-run` produces real video verified against Python. Only `frame_colorizer` is wired to the processor factory so far |
+| 6 Workflows, jobs, CLI | workflows, jobs and CLI complete; `headless-run` produces real video verified against Python. 3 of 11 processors wired and verified (`frame_colorizer`, `background_remover`, `face_debugger`) |
 | 7 UI (Blazor) | **not started** |
 | 8 Streaming / webcam | **not started** |
 | 9 Performance tuning | **not started** (deliberately sequenced after parity) |
@@ -219,6 +219,26 @@ the comparison fair.
 
 Job files written by the C# CLI are validated and read back by the real Python
 `job_manager`, and vice versa.
+
+## Wiring a processor requires running it, not compiling it
+
+An attempt to wire the remaining eight processors was **rejected and not merged**. It
+compiled, the unit tests passed, and the report claimed ten of eleven processors wired —
+but running the binary showed `face_swapper` exiting 1 with no output while the Python
+equivalent succeeded, and, worse, `frame_colorizer` — previously wired, pixel-verified and
+committed — had been regressed to failing too. Proved by stashing the changes and
+rebuilding, which restored it.
+
+The work is preserved in `git stash` rather than discarded, since the missing
+`IProcessor` adapters in it may be salvageable. It is not applied, because a tree that
+builds and passes a thousand tests while silently failing at runtime is worse than one
+that does less and works — the suite stops being evidence.
+
+The standing rule for this phase: **a processor is wired only when both CLIs have been run
+on the same input and the outputs compared.** Anything else keeps its named
+`NotSupportedException`. `face_swapper`'s own parity tests were green throughout while its
+assembled pipeline had never once executed — which is how the `PixelBoost` dtype defect
+survived to be found here.
 
 ## Parity defects found and fixed
 
