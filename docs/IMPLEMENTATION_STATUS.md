@@ -273,6 +273,15 @@ the comparison fair.
 Job files written by the C# CLI are validated and read back by the real Python
 `job_manager`, and vice versa.
 
+`batch-run` is verified too. Both implementations were pointed at the same glob
+(`-t '<dir>/*'`, one video and one image) with the same output pattern:
+
+| | C# | Python |
+| --- | --- | --- |
+| Steps built from the glob | 2 | 2 |
+| Video output | 43.94 dB, max 18, 0% >30 | — |
+| Image output | **byte-identical** | — |
+
 ## All eleven processors are wired and compared against Python
 
 Each was verified by running both CLIs with identical arguments on the same 8 frames of
