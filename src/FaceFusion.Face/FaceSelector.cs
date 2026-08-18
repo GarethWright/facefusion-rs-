@@ -385,10 +385,13 @@ public static class FaceSelector
             var faceAgeStart = face.Age.Start.Value;
             var faceAgeEnd = face.Age.End.Value;
 
-            // Two half-open intervals [a0, a1) and [b0, b1) overlap iff a0 < b1 && b0 < a1.
-            // This is also correctly false whenever either interval is empty (start >= end),
-            // matching Python's `range(start, end)` being the empty range in that case.
-            if (faceAgeStart < faceSelectorAgeEnd && faceSelectorAgeStart < faceAgeEnd)
+            // Two half-open intervals [a0, a1) and [b0, b1) overlap iff
+            // max(a0, b0) < min(a1, b1). Unlike the simpler `a0 < b1 && b0 < a1` form, this is
+            // also correctly false whenever *either* interval is degenerate/empty (start >=
+            // end) — e.g. a0=a1=20 with b=[15,25) satisfies `a0 < b1 && b0 < a1` (20<25 and
+            // 15<20) despite the empty interval having no elements to overlap with — matching
+            // Python's `range(start, end)` being the empty range whenever start >= end.
+            if (Math.Max(faceAgeStart, faceSelectorAgeStart) < Math.Min(faceAgeEnd, faceSelectorAgeEnd))
             {
                 filterFaces.Add(face);
             }

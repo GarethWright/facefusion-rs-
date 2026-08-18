@@ -25,6 +25,14 @@ public static class EnumNames
 				var value = (T)field.GetValue(null)!;
 				var attribute = field.GetCustomAttribute<WireNameAttribute>();
 
+				if (field.GetCustomAttribute<NonWireValueAttribute>() != null)
+				{
+					// Deliberately has no Python counterpart (e.g. the zero member of a
+					// [Flags] enum). Excluded from the wire map rather than given a
+					// fabricated name.
+					continue;
+				}
+
 				if (attribute == null)
 				{
 					throw new InvalidOperationException(
