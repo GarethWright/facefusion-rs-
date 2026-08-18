@@ -69,6 +69,9 @@ public static class ProcessorStepFactory
 			"frame_colorizer" => FrameColorizer.PreCheck(ReadFrameColorizerModel(args)),
 			"background_remover" => BackgroundRemover.PreCheck(ReadBackgroundRemoverModel(args)),
 			"face_debugger" => FacePipelineFactory.PreCheck(args),
+			// face_swapper needs its own model AND the shared face pipeline, since it
+			// resolves both a source face and the target faces before swapping.
+			"face_swapper" => FaceSwapper.PreCheck(ReadFaceSwapperModel(args)) && FacePipelineFactory.PreCheck(args),
 			_ => throw Unsupported(processorName),
 		};
 	}
@@ -91,6 +94,7 @@ public static class ProcessorStepFactory
 			"frame_colorizer" => BuildFrameColorizer(args),
 			"background_remover" => BuildBackgroundRemover(args),
 			"face_debugger" => BuildFaceDebugger(args, faceResources ?? throw MissingFaceResources(processorName)),
+			"face_swapper" => BuildFaceSwapper(args, faceResources ?? throw MissingFaceResources(processorName)),
 			_ => throw Unsupported(processorName),
 		};
 	}
@@ -298,6 +302,125 @@ public static class ProcessorStepFactory
 			: new CompositeDisposable(extraSessions);
 
 		return new BuiltStep(step, resource);
+	}
+
+
+	// -----------------------------------------------------------------
+	// face_swapper
+	// -----------------------------------------------------------------
+
+	// Defaults taken from face_swapper/core.py's own register_args, NOT guessed: the model
+	// defaults to hyperswap_1a_256 and the weight to 0.5. An earlier version of this file
+	// used inswapper_128 and 1.0, which made a comparison against the Python CLI compare
+	// two different models and look like a 33 dB parity failure.
+	private static FaceSwapperModel ReadFaceSwapperModel(IReadOnlyDictionary<string, object?> args)
+		=> EnumNames.FromWireName<FaceSwapperModel>(StepArgsReader.GetString(args, "face_swapper_model", "hyperswap_1a_256"));
+
+	private static BuiltStep BuildFaceSwapper(IReadOnlyDictionary<string, object?> args, FacePipelineFactory.Resources faceResources)
+	{
+		var model = ReadFaceSwapperModel(args);
+		var options = FaceSwapper.CreateStaticModelSet(DownloadScope.Full)[model];
+		// Python: default = get_first(face_swapper_pixel_boost_choices), i.e. the first entry
+		// of the CHOSEN model's own list, not a fixed literal.
+		var pixelBoostChoices = FaceSwapper.FaceSwapperPixelBoostChoices[model];
+		var pixelBoost = StepArgsReader.GetString(args, "face_swapper_pixel_boost", pixelBoostChoices[0]);
+		var weight = StepArgsReader.GetDouble(args, "face_swapper_weight", 0.5);
+
+		var selector = ReadFaceSelectorSettings(args);
+		var masks = ReadFaceMaskSettings(args);
+
+		var sessions = new List<InferenceSession>();
+		var faceSwapperSession = new InferenceSession(options.Sources["face_swapper"].Path);
+		sessions.Add(faceSwapperSession);
+
+		// Only the ghost/hyperswap families ship an embedding converter; the rest have no
+		// such source and Python simply never looks one up.
+		InferenceSession? embeddingConverterSession = null;
+
+		if (options.Sources.TryGetValue("embedding_converter", out var embeddingConverter))
+		{
+			embeddingConverterSession = new InferenceSession(embeddingConverter.Path);
+			sessions.Add(embeddingConverterSession);
+		}
+
+		// Python: get_static_model_initializer(model_path) — inswapper's swap maths needs the
+		// model's last graph initializer as a matrix. Only the inswapper family reads it.
+		var inswapperInitializer = options.Type == FaceSwapperModelKind.Inswapper
+			? FaceFusion.Inference.ModelHelper.GetStaticModelInitializer(options.Sources["face_swapper"].Path)
+			: null;
+
+		var processor = new FaceSwapper.Processor();
+
+		var step = new WorkflowProcessorStep(processor, context => new FaceSwapper.FaceSwapperInputs(
+			context.ReferenceVisionFrame,
+			context.SourceVisionFrames,
+			context.TargetVisionFrames,
+			context.TempVisionFrame,
+			context.TempVisionMask,
+			model,
+			pixelBoost,
+			weight,
+			masks.Types,
+			masks.Blur,
+			masks.Padding,
+			faceSwapperSession,
+			embeddingConverterSession,
+			inswapperInitializer,
+			selector.Mode,
+			selector.TrackerScore,
+			selector.Order,
+			selector.Gender,
+			selector.Race,
+			selector.AgeStart,
+			selector.AgeEnd,
+			selector.ReferenceFacePosition,
+			selector.ReferenceFaceDistance,
+			faceResources.GetStaticFaces,
+			faceResources.RefillFaces));
+
+		return new BuiltStep(step, new CompositeDisposable(sessions));
+	}
+
+	/// <summary>The face-selector settings every face-pipeline processor reads, in one place
+	/// rather than repeated per processor.</summary>
+	private sealed record FaceSelectorSettings(
+		FaceSelectorMode Mode,
+		double TrackerScore,
+		FaceSelectorOrder Order,
+		FaceSelectorGender? Gender,
+		FaceSelectorRace? Race,
+		int? AgeStart,
+		int? AgeEnd,
+		int ReferenceFacePosition,
+		double ReferenceFaceDistance);
+
+	private static FaceSelectorSettings ReadFaceSelectorSettings(IReadOnlyDictionary<string, object?> args)
+	{
+		var genderName = StepArgsReader.GetStringOrNull(args, "face_selector_gender");
+		var raceName = StepArgsReader.GetStringOrNull(args, "face_selector_race");
+
+		return new FaceSelectorSettings(
+			EnumNames.FromWireName<FaceSelectorMode>(StepArgsReader.GetString(args, "face_selector_mode", "reference")),
+			StepArgsReader.GetDouble(args, "face_tracker_score", 0.0),
+			EnumNames.FromWireName<FaceSelectorOrder>(StepArgsReader.GetString(args, "face_selector_order", "large-small")),
+			genderName is null ? null : EnumNames.FromWireName<FaceSelectorGender>(genderName),
+			raceName is null ? null : EnumNames.FromWireName<FaceSelectorRace>(raceName),
+			StepArgsReader.GetIntOrNull(args, "face_selector_age_start"),
+			StepArgsReader.GetIntOrNull(args, "face_selector_age_end"),
+			StepArgsReader.GetInt(args, "reference_face_position", 0),
+			StepArgsReader.GetDouble(args, "reference_face_distance", 0.3));
+	}
+
+	private sealed record FaceMaskSettings(IReadOnlyList<FaceMaskType> Types, double Blur, Padding Padding);
+
+	private static FaceMaskSettings ReadFaceMaskSettings(IReadOnlyDictionary<string, object?> args)
+	{
+		var paddingValues = StepArgsReader.GetIntList(args, "face_mask_padding", new[] { 0, 0, 0, 0 });
+
+		return new FaceMaskSettings(
+			ReadEnumList<FaceMaskType>(args, "face_mask_types", new[] { "box" }),
+			StepArgsReader.GetDouble(args, "face_mask_blur", 0.3),
+			new Padding(paddingValues[0], paddingValues[1], paddingValues[2], paddingValues[3]));
 	}
 
 	/// <summary>Disposes a fixed set of <see cref="InferenceSession"/>s together — used for a
