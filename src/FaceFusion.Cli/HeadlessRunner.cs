@@ -71,15 +71,40 @@ public static class HeadlessRunner
 
 		if (!PreCheck.CommonPreCheck(PreCheck.ContentAnalyserHash))
 		{
+			// Python's common_pre_check failure is equally quiet, but a silent exit is
+			// unhelpful when the gate is the thing blocking a run.
+			logger.Error("content analyser integrity check failed", ModuleName);
 			return false;
 		}
 
-		if (!PreCheck.ProcessorsPreCheck(processorNames.Select(name => (Func<bool>)(() => ProcessorStepFactory.PreCheck(name, stepArgs)))))
+		foreach (var name in processorNames)
 		{
-			return false;
+			// Report WHICH processor failed its pre-check. Reporting only "false" left the
+			// CLI exiting 1 after "creating temporary resources" with no clue why.
+			if (!ProcessorStepFactory.PreCheck(name, stepArgs))
+			{
+				logger.Error($"processor '{name}' pre-check failed — its model files are missing or unreadable", ModuleName);
+				return false;
+			}
 		}
 
 		var errorCode = ConditionalProcess(stepArgs, processorNames, logger);
+
+		if (errorCode != 0)
+		{
+			// Name the code. Python's error codes are documented in core.py; a bare
+			// non-zero exit told the user nothing about which stage refused.
+			var reason = errorCode switch
+			{
+				2 => "workflow mode did not match the target (image vs video)",
+				3 => "content analyser rejected the media",
+				4 => "processing was stopped",
+				_ => "processing failed"
+			};
+
+			logger.Error($"{reason} (error code {errorCode})", ModuleName);
+		}
+
 		return errorCode == 0;
 	}
 
@@ -181,6 +206,15 @@ public static class HeadlessRunner
 				processManager,
 				updateProgress: null,
 				logger: logger);
+		}
+		catch (Exception exception)
+		{
+			// Python lets the traceback reach the terminal. Swallowing it here produced a
+			// CLI that exited 1 after "creating temporary resources" with no indication of
+			// what went wrong, which is far worse to debug than a stack trace.
+			logger.Error($"{exception.GetType().Name}: {exception.Message}", ModuleName);
+			logger.Debug(exception.ToString(), ModuleName);
+			return 1;
 		}
 		finally
 		{

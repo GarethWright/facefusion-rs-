@@ -72,6 +72,7 @@ public static class ProcessorStepFactory
 			// face_swapper needs its own model AND the shared face pipeline, since it
 			// resolves both a source face and the target faces before swapping.
 			"face_swapper" => FaceSwapper.PreCheck(ReadFaceSwapperModel(args)) && FacePipelineFactory.PreCheck(args),
+			"age_modifier" => AgeModifier.PreCheck(ReadAgeModifierModel(args)) && FacePipelineFactory.PreCheck(args),
 			_ => throw Unsupported(processorName),
 		};
 	}
@@ -95,6 +96,7 @@ public static class ProcessorStepFactory
 			"background_remover" => BuildBackgroundRemover(args),
 			"face_debugger" => BuildFaceDebugger(args, faceResources ?? throw MissingFaceResources(processorName)),
 			"face_swapper" => BuildFaceSwapper(args, faceResources ?? throw MissingFaceResources(processorName)),
+			"age_modifier" => BuildAgeModifier(args, faceResources ?? throw MissingFaceResources(processorName)),
 			_ => throw Unsupported(processorName),
 		};
 	}
@@ -421,6 +423,52 @@ public static class ProcessorStepFactory
 			ReadEnumList<FaceMaskType>(args, "face_mask_types", new[] { "box" }),
 			StepArgsReader.GetDouble(args, "face_mask_blur", 0.3),
 			new Padding(paddingValues[0], paddingValues[1], paddingValues[2], paddingValues[3]));
+	}
+
+
+	// -----------------------------------------------------------------
+	// age_modifier
+	// -----------------------------------------------------------------
+
+	// Defaults from age_modifier/core.py's register_args: model 'fran', direction 0.
+	private static AgeModifierModel ReadAgeModifierModel(IReadOnlyDictionary<string, object?> args)
+		=> EnumNames.FromWireName<AgeModifierModel>(StepArgsReader.GetString(args, "age_modifier_model", "fran"));
+
+	private static BuiltStep BuildAgeModifier(IReadOnlyDictionary<string, object?> args, FacePipelineFactory.Resources faceResources)
+	{
+		var model = ReadAgeModifierModel(args);
+		var options = AgeModifier.CreateStaticModelSet(DownloadScope.Full)[model];
+		var direction = StepArgsReader.GetInt(args, "age_modifier_direction", 0);
+		var selector = ReadFaceSelectorSettings(args);
+		var masks = ReadFaceMaskSettings(args);
+
+		var session = new InferenceSession(options.Sources["age_modifier"].Path);
+		var processor = new AgeModifier.Processor();
+
+		var step = new WorkflowProcessorStep(processor, context => new AgeModifier.AgeModifierInputs(
+			context.ReferenceVisionFrame,
+			context.SourceVisionFrames,
+			context.TargetVisionFrames,
+			context.TempVisionFrame,
+			context.TempVisionMask,
+			model,
+			direction,
+			masks.Types,
+			masks.Blur,
+			session,
+			selector.Mode,
+			selector.TrackerScore,
+			selector.Order,
+			selector.Gender,
+			selector.Race,
+			selector.AgeStart,
+			selector.AgeEnd,
+			selector.ReferenceFacePosition,
+			selector.ReferenceFaceDistance,
+			faceResources.GetStaticFaces,
+			faceResources.RefillFaces));
+
+		return new BuiltStep(step, session);
 	}
 
 	/// <summary>Disposes a fixed set of <see cref="InferenceSession"/>s together — used for a

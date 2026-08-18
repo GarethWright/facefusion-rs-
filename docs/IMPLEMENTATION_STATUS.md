@@ -240,6 +240,30 @@ on the same input and the outputs compared.** Anything else keeps its named
 assembled pipeline had never once executed — which is how the `PixelBoost` dtype defect
 survived to be found here.
 
+## Open defect: memory scales badly with execution_thread_count
+
+`age_modifier` on **8 frames of a 426x226 clip** was killed by the OOM killer at
+**~11.7 GB RSS** (`dmesg`: `anon-rss:11669352kB`). The same run with
+`--execution-thread-count 1` completes and produces output matching Python at 43.3 dB, so
+this is not a correctness bug — the per-frame footprint is simply enormous and multiplies
+by the thread count. Python survives the same run at the same default of 8 threads.
+
+This is the failure plan §5a predicted, and it matters more than the test suite suggests:
+~1.5 GB per in-flight frame on a tiny clip makes any real 1080p job impossible. Nothing in
+the suite catches it because tests run few frames at low concurrency.
+
+Worth investigating first: whether concurrent `OrtValue`/`Mat` allocations are being held
+until GC rather than disposed promptly, and whether ONNX Runtime's arena allocator is being
+defeated by per-run allocation. The plan's §5b IO-binding work is the likely remedy.
+
+## Silent failures in the CLI were themselves a defect
+
+The above took far too long to diagnose because the CLI exited 1 after
+"creating temporary resources" with no further output. It now reports which processor's
+pre-check failed, names the error code's meaning, and logs any exception with its stack
+trace at debug level. Python lets a traceback reach the terminal; swallowing it was strictly
+worse than a noisy failure.
+
 ## Parity defects found and fixed
 
 Each of these was caught by a test or by the de-duplication pass rather than by reading
