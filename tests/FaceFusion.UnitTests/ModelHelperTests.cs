@@ -90,7 +90,7 @@ public sealed class ModelHelperTests
             // float16 has ~3 decimal digits of precision; float32/int/double fixtures
             // round-trip exactly, so a tight-but-nonzero tolerance covers every case
             // uniformly without special-casing dtypes here.
-            Assert.Equal(expectedValues[i], actualValues[i], precision: 3);
+            Assert.Equal((double)expectedValues[i], (double)actualValues[i], precision: 3);
         }
     }
 

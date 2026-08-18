@@ -32,7 +32,7 @@ public class NumPyTests
     public void Interp_Scalar_MatchesNumPy(float x, float expected)
     {
         var actual = NumPy.Interp(x, InterpXp, InterpFp);
-        Assert.Equal(expected, actual, precision: 4);
+        Assert.Equal((double)expected, (double)actual, precision: 4);
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public class NumPyTests
     [InlineData(0.125f, 0.11999999731779099f)]
     public void Round_WithDecimals_MatchesNumPy(float value, float expected)
     {
-        Assert.Equal(expected, NumPy.Round(value, 2), precision: 5);
+        Assert.Equal((double)expected, (double)NumPy.Round(value, 2), precision: 5);
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class NumPyTests
     public void Mean_MatchesNumPy()
     {
         // Verified against: numpy.mean([1,5,3,5,-2], dtype=float32) -> 2.4000000953674316
-        Assert.Equal(2.4000000953674316f, NumPy.Mean(Sample), precision: 5);
+        Assert.Equal((double)2.4000000953674316f, (double)NumPy.Mean(Sample), precision: 5);
     }
 
     [Fact]

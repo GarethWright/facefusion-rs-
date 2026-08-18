@@ -2,8 +2,12 @@
 
 Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as phases land.
 
-**Current state: Phases 0–3 complete, Phase 4 begun.** Clean build with 0 warnings and
-0 errors; **600 tests passing** (516 unit + 84 parity), 2 skipped.
+**Current state: Phases 0–4 complete.** Clean build with 0 warnings and 0 errors;
+**731 tests passing** (611 unit + 120 parity), 2 skipped.
+
+Phase 4 is verified against **real ONNX inference**, not reimplementations: the models
+download automatically via each module's `pre_check()`, so the C# face pipeline is compared
+against the actual Python pipeline running the same weights on the same image.
 
 The Phase 2 milestone is now **verified end to end**, not just in code: ffmpeg is
 installed, the example media are present, and `Phase2MilestoneTests` extracts frames from
@@ -134,6 +138,48 @@ A third difference is deliberate and should stay: `ReadStaticImage`/`ReadStaticV
 return a `Clone()` from their cache, where Python's `lru_cache` hands back the same array
 object to every caller. Reproducing Python's aliasing is unsafe under `Mat` disposal — a
 caller disposing "their" frame would corrupt the cache for everyone.
+
+## Phase 4 parity results
+
+The face pipeline was compared against real Python inference on `source.jpg` (10 detected
+faces). The headline result: **every model-input tensor matched Python exactly**, which is
+the check that matters — if inputs match, output differences are ONNX Runtime's own; if
+inputs differ, there is a preprocessing bug.
+
+| Stage | Result |
+| --- | --- |
+| `prepare_detect_frame` / `normalize_detect_frame` (all 3 variants) | exact, rtol = atol = 0 |
+| Detector outputs, all 4 families | max rel. diff ~2e-7 (float32 noise) |
+| Landmarker scale/translation | matched to 1e-9 |
+| `conditional_optimize_contrast` | bit-for-bit |
+| Recognizer / classifier input tensors | matched to 1e-6 |
+| Content analyser tensors, scores, verdict | 1e-6; verdict exact |
+
+One genuine, measured divergence remains, and it is **not** a port defect: OpenCvSharp's
+native OpenCV build and `opencv-python-headless` resolve bilinear interpolation slightly
+differently, so `WarpAffine` output differs by up to 2/255 on ~9% of pixels given
+bit-identical affine matrices (~62 dB PSNR). It is isolated by dedicated tests and only
+loosens the two assertions it cascades into — the landmarker input tensor (PSNR > 50 dB,
+measured 56) and the recognizer embedding (cosine similarity > 0.999, measured 0.99996,
+which is the property face matching actually depends on). Every discrete output — landmarks
+after inverse transform, gender, age, race — is robust to it and asserts at 1e-3/1e-4.
+
+## The content analyser gate
+
+Plan §9.6 requires the NSFW gate to survive the port. It is ported completely — all three
+models, the majority-vote rule, every threshold — with **no bypass flag anywhere**.
+
+Python makes it tamper-evident by hashing `inspect.getsource(content_analyser)` in
+`core.py`. C# has no `inspect.getsource`, so `ContentAnalyser.VerifyIntegrity` hashes the
+module's own source file, located via a `[CallerFilePath]` constant fixed at compile time
+so a caller cannot redirect it, using the same CRC32 hash. It fails closed. The expected
+hash deliberately lives outside the file, mirroring Python's split (`3c6ce25e` lives in
+`core.py`).
+
+Honest limits, documented in the class: it detects on-disk edits to the file, but cannot
+cover a deployment that ships only the compiled DLL without sources, nor IL tampering (IL
+is not stable across build configurations, so a hard-coded IL hash would false-fail), nor
+in-memory patching. Wiring it into a `common_pre_check` equivalent belongs to Phase 6.
 
 ## Parity defects found and fixed
 

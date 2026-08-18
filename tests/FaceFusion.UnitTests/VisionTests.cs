@@ -249,7 +249,7 @@ public sealed class VisionTests : IClassFixture<VisionFixture>
     [Fact]
     public void DetectVideoDuration()
     {
-        Assert.Equal(10.8, FaceFusion.Vision.Vision.DetectVideoDuration(_fixture.Video270Path), precision: 6);
+        Assert.Equal((double)10.8, (double)FaceFusion.Vision.Vision.DetectVideoDuration(_fixture.Video270Path), precision: 6);
         Assert.Equal(0, FaceFusion.Vision.Vision.DetectVideoDuration("invalid"));
     }
 
@@ -339,7 +339,7 @@ public sealed class VisionTests : IClassFixture<VisionFixture>
         using var source = CreateHueGradientFrame(64, 64);
         using var target = CreateDesaturatedFrame(source);
 
-        Assert.Equal(1.0, FaceFusion.Vision.Vision.CalculateHistogramDifference(source, source), precision: 6);
+        Assert.Equal((double)1.0, (double)FaceFusion.Vision.Vision.CalculateHistogramDifference(source, source), precision: 6);
         Assert.True(FaceFusion.Vision.Vision.CalculateHistogramDifference(source, target) < 0.5);
     }
 
