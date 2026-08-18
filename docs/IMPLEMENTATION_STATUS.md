@@ -2,8 +2,14 @@
 
 Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as phases land.
 
-**Current state: Phases 0–4 complete.** Clean build with 0 warnings and 0 errors;
-**731 tests passing** (611 unit + 120 parity), 2 skipped.
+**Current state: Phases 0–4 complete, Phase 5 in progress.** Clean build with 0 warnings
+and 0 errors; **893 tests passing** (730 unit + 163 parity), 3 skipped.
+
+Phase 5 has 7 of 11 processors ported (face_swapper, face_enhancer, frame_enhancer,
+face_debugger, frame_colorizer, background_remover) plus the `IProcessor` foundation and
+the audio layer. Still to do: `expression_restorer`, `age_modifier`, `deep_swapper`,
+`face_editor`, `lip_syncer`, and the shared `live_portrait`. Several ported modules still
+lack test files — tracked under Known gaps.
 
 Phase 4 is verified against **real ONNX inference**, not reimplementations: the models
 download automatically via each module's `pre_check()`, so the C# face pipeline is compared
@@ -180,6 +186,14 @@ Honest limits, documented in the class: it detects on-disk edits to the file, bu
 cover a deployment that ships only the compiled DLL without sources, nor IL tampering (IL
 is not stable across build configurations, so a hard-coded IL hash would false-fail), nor
 in-memory patching. Wiring it into a `common_pre_check` equivalent belongs to Phase 6.
+
+## A note on running the test suite
+
+Real ONNX inference makes the suite slow — a full `dotnet test` is several minutes on 4
+cores. **Do not run it from several agents at once.** Doing so once drove load average to
+71 on a 4-core box, at which point every run starved and the whole thing appeared to hang.
+Iterate with `--filter` on the tests you are changing and leave full-suite verification to
+one runner.
 
 ## Parity defects found and fixed
 
