@@ -193,11 +193,11 @@ public static class TensorComparison
 
         var totalCount = actual.Length;
         var mismatchCount = 0;
-        var maxAbsoluteDifference = 0.0;
-        var maxRelativeDifference = 0.0;
-        var maxDifferenceIndex = totalCount > 0 ? 0 : -1;
-        var actualAtMax = totalCount > 0 ? actual[0] : double.NaN;
-        var expectedAtMax = totalCount > 0 ? expected[0] : double.NaN;
+        var maxAbsoluteDifference = double.NegativeInfinity;
+        var maxRelativeDifference = double.NaN;
+        var maxDifferenceIndex = -1;
+        var actualAtMax = double.NaN;
+        var expectedAtMax = double.NaN;
 
         for (var i = 0; i < totalCount; i++)
         {
@@ -210,10 +210,11 @@ public static class TensorComparison
             var relativeDifference = ElementRelativeDifference(a, e, absoluteDifference);
 
             // Track the element with the largest absolute difference for diagnostics. NaN
-            // comparisons never win (NaN absoluteDifference compares false to everything),
-            // so the first element remains the reported one unless a larger finite/inf
-            // difference appears - which is fine, we still flag the failure via mismatchCount.
-            if (absoluteDifference > maxAbsoluteDifference || (i == 0))
+            // differences (from a NaN actual/expected) never win over a real numeric
+            // difference, since "absoluteDifference > maxAbsoluteDifference" is always false
+            // when absoluteDifference is NaN - they only get reported when nothing else has
+            // set a candidate yet (maxDifferenceIndex == -1), e.g. an all-NaN array.
+            if (maxDifferenceIndex == -1 || absoluteDifference > maxAbsoluteDifference)
             {
                 maxAbsoluteDifference = absoluteDifference;
                 maxRelativeDifference = relativeDifference;
