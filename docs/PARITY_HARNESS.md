@@ -107,6 +107,18 @@ transparently falls back to `foo.npy.gz`, which means **compressing a fixture ne
 requires touching the test that reads it**. Compression is about 4x (the corpus went from
 34 MB to 15 MB).
 
+**Budget: keep each stage's fixtures under ~5 MB.** The corpus reached 92 MB before this
+was enforced, with one processor batch alone contributing 45 MB. Dump the model *input*
+tensor plus a modest output sample rather than every intermediate at full resolution — a
+mismatch given a matching input is ONNX Runtime's arithmetic, not a port bug, so a
+full-resolution output dump earns little. Prefer one image and one model family per stage;
+the dumper scripts in `tools/parity/` regenerate the rest on demand.
+
+Watch for dumps nothing reads: three unreferenced tensors were carrying 12 MB. Note that
+some fixture names are built dynamically (`$"frame/fit_contain_{width}x{height}.npy"`), so
+a plain grep for a filename under-reports usage — check how the test constructs the name
+before deleting anything.
+
 When adding fixtures, gzip anything over ~500 KB:
 
 ```
