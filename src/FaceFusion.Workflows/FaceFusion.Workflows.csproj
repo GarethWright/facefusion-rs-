@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FaceFusion.Types\FaceFusion.Types.csproj" />
+    <ProjectReference Include="..\FaceFusion.Core\FaceFusion.Core.csproj" />
+    <ProjectReference Include="..\FaceFusion.Tensors\FaceFusion.Tensors.csproj" />
+    <ProjectReference Include="..\FaceFusion.Vision\FaceFusion.Vision.csproj" />
+    <ProjectReference Include="..\FaceFusion.Media\FaceFusion.Media.csproj" />
+    <ProjectReference Include="..\FaceFusion.Inference\FaceFusion.Inference.csproj" />
+    <ProjectReference Include="..\FaceFusion.Face\FaceFusion.Face.csproj" />
+    <ProjectReference Include="..\FaceFusion.Processors\FaceFusion.Processors.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
