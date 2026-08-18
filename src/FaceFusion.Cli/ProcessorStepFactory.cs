@@ -73,6 +73,10 @@ public static class ProcessorStepFactory
 			// resolves both a source face and the target faces before swapping.
 			"face_swapper" => FaceSwapper.PreCheck(ReadFaceSwapperModel(args)) && FacePipelineFactory.PreCheck(args),
 			"age_modifier" => AgeModifier.PreCheck(ReadAgeModifierModel(args)) && FacePipelineFactory.PreCheck(args),
+			"expression_restorer" => ExpressionRestorer.PreCheck() && FacePipelineFactory.PreCheck(args),
+			"face_editor" => FaceEditor.PreCheck() && FacePipelineFactory.PreCheck(args),
+			"deep_swapper" => DeepSwapper.PreCheck(ReadDeepSwapperModel(args)) && FacePipelineFactory.PreCheck(args),
+			"lip_syncer" => LipSyncer.PreCheck(ReadLipSyncerModel(args)) && FacePipelineFactory.PreCheck(args),
 			_ => throw Unsupported(processorName),
 		};
 	}
@@ -97,6 +101,10 @@ public static class ProcessorStepFactory
 			"face_debugger" => BuildFaceDebugger(args, faceResources ?? throw MissingFaceResources(processorName)),
 			"face_swapper" => BuildFaceSwapper(args, faceResources ?? throw MissingFaceResources(processorName)),
 			"age_modifier" => BuildAgeModifier(args, faceResources ?? throw MissingFaceResources(processorName)),
+			"expression_restorer" => BuildExpressionRestorer(args, faceResources ?? throw MissingFaceResources(processorName)),
+			"face_editor" => BuildFaceEditor(args, faceResources ?? throw MissingFaceResources(processorName)),
+			"deep_swapper" => BuildDeepSwapper(args, faceResources ?? throw MissingFaceResources(processorName)),
+			"lip_syncer" => BuildLipSyncer(args, faceResources ?? throw MissingFaceResources(processorName)),
 			_ => throw Unsupported(processorName),
 		};
 	}
@@ -469,6 +477,278 @@ public static class ProcessorStepFactory
 			faceResources.RefillFaces));
 
 		return new BuiltStep(step, session);
+	}
+
+
+	// -----------------------------------------------------------------
+	// Shared: the optional face-masker sessions
+	// -----------------------------------------------------------------
+
+	/// <summary>The occluder/parser inference pools <c>FaceMasker.CreateOcclusionMask</c> and
+	/// <c>CreateRegionMask</c> need, opened only when the run's <c>--face-mask-types</c> actually
+	/// asks for them — matching Python, where <c>face_masker.get_inference_pool()</c> is reached
+	/// only from inside the corresponding <c>create_*_mask</c> call. The returned sessions are
+	/// owned by the caller and belong in the step's <see cref="BuiltStep.Resource"/>.</summary>
+	private sealed record MaskerSessions(
+		IReadOnlyDictionary<string, InferenceSession>? OccluderPool,
+		IReadOnlyDictionary<string, InferenceSession>? ParserPool,
+		IReadOnlyList<InferenceSession> Sessions);
+
+	private static MaskerSessions BuildMaskerSessions(IReadOnlyList<FaceMaskType> faceMaskTypes, FaceOccluderModel occluderModel, FaceParserModel parserModel)
+	{
+		IReadOnlyDictionary<string, InferenceSession>? occluderPool = null;
+		IReadOnlyDictionary<string, InferenceSession>? parserPool = null;
+		var modelsDirectory = HeadlessRunner.ResolveModelsDirectory();
+		var sessions = new List<InferenceSession>();
+
+		if (faceMaskTypes.Contains(FaceMaskType.Occlusion))
+		{
+			var occluderFileName = occluderModel.ToWireName();
+			var occluderSession = new InferenceSession(Path.Combine(modelsDirectory, occluderFileName + ".onnx"));
+			sessions.Add(occluderSession);
+			occluderPool = new Dictionary<string, InferenceSession> { [occluderFileName] = occluderSession };
+		}
+
+		if (faceMaskTypes.Contains(FaceMaskType.Region))
+		{
+			var parserFileName = parserModel.ToWireName();
+			var parserSession = new InferenceSession(Path.Combine(modelsDirectory, parserFileName + ".onnx"));
+			sessions.Add(parserSession);
+			parserPool = new Dictionary<string, InferenceSession> { [parserFileName] = parserSession };
+		}
+
+		return new MaskerSessions(occluderPool, parserPool, sessions);
+	}
+
+	private static FaceOccluderModel ReadFaceOccluderModel(IReadOnlyDictionary<string, object?> args)
+		=> EnumNames.FromWireName<FaceOccluderModel>(StepArgsReader.GetString(args, "face_occluder_model", "xseg_1"));
+
+	private static FaceParserModel ReadFaceParserModel(IReadOnlyDictionary<string, object?> args)
+		=> EnumNames.FromWireName<FaceParserModel>(StepArgsReader.GetString(args, "face_parser_model", "bisenet_resnet_34"));
+
+	// -----------------------------------------------------------------
+	// expression_restorer
+	// -----------------------------------------------------------------
+
+	// Defaults from expression_restorer/core.py's register_args: model 'live_portrait',
+	// factor 80, areas = every ExpressionRestorerArea (Python: ' '.join(choices)).
+	private static BuiltStep BuildExpressionRestorer(IReadOnlyDictionary<string, object?> args, FacePipelineFactory.Resources faceResources)
+	{
+		var options = ExpressionRestorer.CreateStaticModelSet(DownloadScope.Full)[ExpressionRestorerModel.LivePortrait];
+		var factor = StepArgsReader.GetInt(args, "expression_restorer_factor", 80);
+		var areas = ReadEnumList<ExpressionRestorerArea>(args, "expression_restorer_areas", new[] { "upper-face", "lower-face" });
+		var selector = ReadFaceSelectorSettings(args);
+		var masks = ReadFaceMaskSettings(args);
+
+		var featureExtractorSession = new InferenceSession(options.Sources["feature_extractor"].Path);
+		var motionExtractorSession = new InferenceSession(options.Sources["motion_extractor"].Path);
+		var generatorSession = new InferenceSession(options.Sources["generator"].Path);
+		var sessions = new List<InferenceSession> { featureExtractorSession, motionExtractorSession, generatorSession };
+
+		var processor = new ExpressionRestorer.Processor();
+
+		var step = new WorkflowProcessorStep(processor, context => new ExpressionRestorer.ExpressionRestorerInputs(
+			context.ReferenceVisionFrame,
+			context.SourceVisionFrames,
+			context.TargetVisionFrames,
+			context.TempVisionFrame,
+			context.TempVisionMask,
+			factor,
+			areas,
+			masks.Types,
+			masks.Blur,
+			featureExtractorSession,
+			motionExtractorSession,
+			generatorSession,
+			selector.Mode,
+			selector.TrackerScore,
+			selector.Order,
+			selector.Gender,
+			selector.Race,
+			selector.AgeStart,
+			selector.AgeEnd,
+			selector.ReferenceFacePosition,
+			selector.ReferenceFaceDistance,
+			faceResources.GetStaticFaces,
+			faceResources.RefillFaces));
+
+		return new BuiltStep(step, new CompositeDisposable(sessions));
+	}
+
+	// -----------------------------------------------------------------
+	// face_editor
+	// -----------------------------------------------------------------
+
+	/// <summary>Python: face_editor/core.py's register_args — fourteen float sliders, every one
+	/// defaulting to 0 (i.e. "no edit"), so a bare <c>--processors face_editor</c> run is a
+	/// no-op pass-through in Python too.</summary>
+	private static FaceEditor.FaceEditorSliders ReadFaceEditorSliders(IReadOnlyDictionary<string, object?> args)
+		=> new(
+			StepArgsReader.GetDouble(args, "face_editor_eyebrow_direction", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_eye_gaze_horizontal", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_eye_gaze_vertical", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_eye_open_ratio", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_lip_open_ratio", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_mouth_grim", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_mouth_pout", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_mouth_purse", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_mouth_smile", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_mouth_position_horizontal", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_mouth_position_vertical", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_head_pitch", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_head_yaw", 0.0),
+			StepArgsReader.GetDouble(args, "face_editor_head_roll", 0.0));
+
+	private static BuiltStep BuildFaceEditor(IReadOnlyDictionary<string, object?> args, FacePipelineFactory.Resources faceResources)
+	{
+		var options = FaceEditor.CreateStaticModelSet(DownloadScope.Full)[FaceEditorModel.LivePortrait];
+		var sliders = ReadFaceEditorSliders(args);
+		var selector = ReadFaceSelectorSettings(args);
+		var masks = ReadFaceMaskSettings(args);
+
+		var featureExtractorSession = new InferenceSession(options.Sources["feature_extractor"].Path);
+		var motionExtractorSession = new InferenceSession(options.Sources["motion_extractor"].Path);
+		var eyeRetargeterSession = new InferenceSession(options.Sources["eye_retargeter"].Path);
+		var lipRetargeterSession = new InferenceSession(options.Sources["lip_retargeter"].Path);
+		var stitcherSession = new InferenceSession(options.Sources["stitcher"].Path);
+		var generatorSession = new InferenceSession(options.Sources["generator"].Path);
+		var sessions = new List<InferenceSession>
+		{
+			featureExtractorSession, motionExtractorSession, eyeRetargeterSession,
+			lipRetargeterSession, stitcherSession, generatorSession,
+		};
+
+		var processor = new FaceEditor.Processor();
+
+		var step = new WorkflowProcessorStep(processor, context => new FaceEditor.FaceEditorInputs(
+			context.ReferenceVisionFrame,
+			context.SourceVisionFrames,
+			context.TargetVisionFrames,
+			context.TempVisionFrame,
+			context.TempVisionMask,
+			sliders,
+			masks.Blur,
+			featureExtractorSession,
+			motionExtractorSession,
+			eyeRetargeterSession,
+			lipRetargeterSession,
+			stitcherSession,
+			generatorSession,
+			selector.Mode,
+			selector.TrackerScore,
+			selector.Order,
+			selector.Gender,
+			selector.Race,
+			selector.AgeStart,
+			selector.AgeEnd,
+			selector.ReferenceFacePosition,
+			selector.ReferenceFaceDistance,
+			faceResources.GetStaticFaces,
+			faceResources.RefillFaces));
+
+		return new BuiltStep(step, new CompositeDisposable(sessions));
+	}
+
+	// -----------------------------------------------------------------
+	// deep_swapper
+	// -----------------------------------------------------------------
+
+	// Defaults from deep_swapper/core.py's register_args: model 'iperov/elon_musk_224',
+	// morph 100. The model key is a "scope/name" string, not an enum (the catalog is built at
+	// runtime and can include user-supplied models) — see DeepSwapper's class remarks.
+	private static string ReadDeepSwapperModel(IReadOnlyDictionary<string, object?> args)
+		=> StepArgsReader.GetString(args, "deep_swapper_model", "iperov/elon_musk_224");
+
+	private static BuiltStep BuildDeepSwapper(IReadOnlyDictionary<string, object?> args, FacePipelineFactory.Resources faceResources)
+	{
+		var model = ReadDeepSwapperModel(args);
+		var options = DeepSwapper.CreateStaticModelSet(DownloadScope.Full)[model];
+		var morph = StepArgsReader.GetInt(args, "deep_swapper_morph", 100);
+		var selector = ReadFaceSelectorSettings(args);
+		var masks = ReadFaceMaskSettings(args);
+
+		var session = new InferenceSession(options.Sources["deep_swapper"].Path);
+		var processor = new DeepSwapper.Processor();
+
+		var step = new WorkflowProcessorStep(processor, context => new DeepSwapper.DeepSwapperInputs(
+			context.ReferenceVisionFrame,
+			context.SourceVisionFrames,
+			context.TargetVisionFrames,
+			context.TempVisionFrame,
+			context.TempVisionMask,
+			model,
+			morph,
+			session,
+			masks.Types,
+			masks.Blur,
+			masks.Padding,
+			selector.Mode,
+			selector.TrackerScore,
+			selector.Order,
+			selector.Gender,
+			selector.Race,
+			selector.AgeStart,
+			selector.AgeEnd,
+			selector.ReferenceFacePosition,
+			selector.ReferenceFaceDistance,
+			faceResources.GetStaticFaces,
+			faceResources.RefillFaces));
+
+		return new BuiltStep(step, session);
+	}
+
+	// -----------------------------------------------------------------
+	// lip_syncer
+	// -----------------------------------------------------------------
+
+	// Defaults from lip_syncer/core.py's register_args: model 'wav2lip_gan_96', weight 0.5.
+	private static LipSyncerModel ReadLipSyncerModel(IReadOnlyDictionary<string, object?> args)
+		=> EnumNames.FromWireName<LipSyncerModel>(StepArgsReader.GetString(args, "lip_syncer_model", "wav2lip_gan_96"));
+
+	private static BuiltStep BuildLipSyncer(IReadOnlyDictionary<string, object?> args, FacePipelineFactory.Resources faceResources)
+	{
+		var model = ReadLipSyncerModel(args);
+		var options = LipSyncer.CreateStaticModelSet(DownloadScope.Full)[model];
+		var weight = StepArgsReader.GetDouble(args, "lip_syncer_weight", 0.5);
+		var selector = ReadFaceSelectorSettings(args);
+		var masks = ReadFaceMaskSettings(args);
+		var occluderModel = ReadFaceOccluderModel(args);
+		var maskerSessions = BuildMaskerSessions(masks.Types, occluderModel, ReadFaceParserModel(args));
+
+		var lipSyncerSession = new InferenceSession(options.Sources["lip_syncer"].Path);
+		var sessions = new List<InferenceSession> { lipSyncerSession };
+		sessions.AddRange(maskerSessions.Sessions);
+
+		var processor = new LipSyncer.Processor();
+
+		var step = new WorkflowProcessorStep(processor, context => new LipSyncer.LipSyncerInputs(
+			context.ReferenceVisionFrame,
+			context.SourceVisionFrames,
+			context.SourceVoiceFrame,
+			context.TargetVisionFrames,
+			context.TempVisionFrame,
+			context.TempVisionMask,
+			model,
+			weight,
+			masks.Types,
+			masks.Blur,
+			masks.Padding,
+			lipSyncerSession,
+			maskerSessions.OccluderPool,
+			occluderModel,
+			selector.Mode,
+			selector.TrackerScore,
+			selector.Order,
+			selector.Gender,
+			selector.Race,
+			selector.AgeStart,
+			selector.AgeEnd,
+			selector.ReferenceFacePosition,
+			selector.ReferenceFaceDistance,
+			faceResources.GetStaticFaces,
+			faceResources.RefillFaces));
+
+		return new BuiltStep(step, new CompositeDisposable(sessions));
 	}
 
 	/// <summary>Disposes a fixed set of <see cref="InferenceSession"/>s together — used for a

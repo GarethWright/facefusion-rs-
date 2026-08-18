@@ -3,8 +3,10 @@ using FaceFusion.Face;
 using FaceFusion.Inference;
 using FaceFusion.Jobs;
 using FaceFusion.Media;
+using FaceFusion.Processors;
 using FaceFusion.Types;
 using FaceFusion.Workflows;
+using Microsoft.ML.OnnxRuntime;
 
 namespace FaceFusion.Cli;
 
@@ -129,6 +131,9 @@ public static class HeadlessRunner
 
 		var built = new List<ProcessorStepFactory.BuiltStep>();
 		FacePipelineFactory.Resources? faceResources = null;
+		// Python: --voice-extractor-model, default kim_vocal_2 (program.py).
+		using var voiceExtraction = new VoiceExtraction(
+			EnumNames.FromWireName<VoiceExtractorModel>(StepArgsReader.GetString(args, "voice_extractor_model", "kim_vocal_2")));
 
 		try
 		{
@@ -146,7 +151,7 @@ public static class HeadlessRunner
 			}
 
 			var processorSteps = built.Select(b => b.Step).ToArray();
-			var context = BuildRunContext(args, workflowMode, targetPath!);
+			var context = BuildRunContext(args, workflowMode, targetPath!, voiceExtraction);
 			var processManager = new ProcessManager();
 			var contentAnalyser = new ContentAnalyser();
 			var modelsDirectory = ResolveModelsDirectory();
@@ -227,7 +232,41 @@ public static class HeadlessRunner
 		}
 	}
 
-	private static WorkflowRunContext BuildRunContext(IReadOnlyDictionary<string, object?> args, WorkflowMode workflowMode, string targetPath)
+	/// <summary>
+	/// Owns the <c>voice_extractor</c> <see cref="InferenceSession"/> for one run, opened on
+	/// first use rather than up front. Python reaches <c>voice_extractor.get_inference_pool()</c>
+	/// only from inside <c>audio.read_voice</c>, which only <c>lip_syncer</c> ever triggers — so
+	/// a run without it must not pay for loading a ~50 MB model. <see cref="Lazy{T}"/> is
+	/// thread-safe by default, which matters: <c>ToVideo.ProcessMemoryFrames</c> calls this from
+	/// several worker threads at once.
+	/// </summary>
+	private sealed class VoiceExtraction : IDisposable
+	{
+		private readonly Lazy<InferenceSession> _session;
+
+		public VoiceExtraction(VoiceExtractorModel model)
+		{
+			var source = VoiceExtractor.CreateStaticModelSet(DownloadScope.Full)[model].Source;
+			_session = new Lazy<InferenceSession>(() => new InferenceSession(source.Path));
+		}
+
+		/// <summary>Python: <c>voice_extractor.batch_extract_voice</c>, which
+		/// <c>audio.read_voice</c> calls directly. See
+		/// <c>FaceFusion.Media.Audio.ExtractVoiceDelegate</c>'s remarks for why the port passes
+		/// it as a delegate instead of importing it.</summary>
+		public double[,] Extract(double[,] audio, int chunkSize, int stepSize)
+			=> VoiceExtractor.BatchExtractVoice(audio, chunkSize, stepSize, _session.Value);
+
+		public void Dispose()
+		{
+			if (_session.IsValueCreated)
+			{
+				_session.Value.Dispose();
+			}
+		}
+	}
+
+	private static WorkflowRunContext BuildRunContext(IReadOnlyDictionary<string, object?> args, WorkflowMode workflowMode, string targetPath, VoiceExtraction voiceExtraction)
 	{
 		var trimFrameStart = StepArgsReader.GetIntOrNull(args, "trim_frame_start");
 		var trimFrameEnd = StepArgsReader.GetIntOrNull(args, "trim_frame_end");
@@ -244,8 +283,7 @@ public static class HeadlessRunner
 			TrimFrameStart: trimFrameStart,
 			TrimFrameEnd: trimFrameEnd,
 			OutputVideoFps: outputVideoFps,
-			ExtractVoice: (audioPath, videoFps, frameNumber) =>
-				throw new InvalidOperationException("voice extraction is not wired on the CLI path yet (lip_syncer/expression_restorer are not built by ProcessorStepFactory)."));
+			ExtractVoice: voiceExtraction.Extract);
 	}
 
 	private static IReadOnlyList<ExecutionProvider> ReadExecutionProviders(IReadOnlyDictionary<string, object?> args)
