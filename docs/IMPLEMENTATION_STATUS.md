@@ -12,6 +12,32 @@ video reader/writer are ported. It is **not** verified end to end, because ffmpe
 installed here — command construction and graceful degradation are tested, an actual
 encode round-trip is not.
 
+## Environment: the real Python pipeline now runs here
+
+Initially neither ffmpeg nor the example media nor most Python packages were available,
+which forced several tests to be skipped and left the parity harness with nothing real to
+compare against. Most of that is now resolved. What is reachable from this environment:
+
+| Source | Status |
+| --- | --- |
+| `pypi.org` / `files.pythonhosted.org` | **reachable** (in the proxy's no-proxy list) |
+| `archive.ubuntu.com` | **reachable** — this is where the .NET SDK and ffmpeg came from |
+| `github.com` release assets | **reachable** — the example media download fine |
+| `builds.dotnet.microsoft.com` | **blocked** by policy — hence net8.0 rather than net10.0 |
+
+Installed as a result: ffmpeg/ffprobe 6.1.1, and for Python numpy 2.4.6,
+opencv-python-headless 5.0.0, onnxruntime, onnx 1.22.0, scipy, scikit-image, tqdm.
+
+**Consequence: `import facefusion.vision` works and the real Python implementation can be
+executed for ground truth.** That is the piece the parity harness was missing — comparisons
+can now be made against the actual pipeline rather than against reimplementations of it.
+Example media live in `/tmp/facefusion-test-examples`, fetched by
+`tools/parity/fetch_examples.sh`, the same path `tests/helper.py` uses so both suites share
+one copy.
+
+CI still has none of this, so tests that need the media must skip with a message pointing
+at the fetch script rather than fail.
+
 ## Library spike: OpenCvSharp and ONNX Runtime both work
 
 The two riskiest bets in the plan were checked before Phase 2 committed to them, and both
