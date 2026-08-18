@@ -935,7 +935,7 @@ public static class Vision
     public static Mat ConditionalMergeVisionMask(Mat visionFrame, Mat visionMask)
     {
         using var belowMax = new Mat();
-        Cv2.Compare(visionMask, 255, belowMax, CmpType.LT);
+        Cv2.Compare(visionMask, 255, belowMax, CmpTypes.LT);
 
         if (Cv2.CountNonZero(belowMax) > 0)
         {
