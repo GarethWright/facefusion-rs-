@@ -2,10 +2,15 @@
 
 Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as phases land.
 
-**Current state: Phase 0 complete, Phases 1–2 partial.** Clean build with 0 warnings and
-0 errors; **295 tests, all passing** (237 unit + 58 parity). Nothing here
-touches ONNX Runtime, OpenCV, or the
-face pipeline yet — those are Phases 3–5 and remain entirely unstarted.
+**Current state: Phases 0–2 complete.** Clean build with 0 warnings and 0 errors;
+**433 tests passing** (375 unit + 58 parity), 9 skipped. OpenCV is in use via OpenCvSharp;
+ONNX Runtime and the face pipeline are Phases 3–5 and remain unstarted.
+
+The Phase 2 milestone is met in code: `ExtractFrames`, `MergeVideo`, `ConcatVideo`,
+`RestoreAudio`, `ReplaceAudio`, `CopyImage`, `FinalizeImage`, `ReadAudioBuffer` and the
+video reader/writer are ported. It is **not** verified end to end, because ffmpeg is not
+installed here — command construction and graceful degradation are tested, an actual
+encode round-trip is not.
 
 ## Library spike: OpenCvSharp and ONNX Runtime both work
 
@@ -96,9 +101,8 @@ they are the kind of thing that quietly changes output.
   frame count for every container. `Ffprobe.cs` now exists, so this should be rewired —
   which requires breaking the `ffmpeg.py -> vision.py -> ffprobe.py` cycle, most cleanly
   with a metadata-provider interface in `FaceFusion.Core` implemented in `FaceFusion.Media`.
-- **`EqualizeFrameColor`'s final cast rounds where NumPy truncates.** `Mat.ConvertTo` to
-  8-bit uses `saturate_cast` (rounds); NumPy's `.astype(uint8)` truncates toward zero. An
-  off-by-one per channel. Being fixed to match NumPy, per conventions rule 1.
+- ~~**`EqualizeFrameColor`'s final cast rounds where NumPy truncates.**~~ **Fixed.** See
+  parity defect 7 below.
 
 A third difference is deliberate and should stay: `ReadStaticImage`/`ReadStaticVideoFrame`
 return a `Clone()` from their cache, where Python's `lru_cache` hands back the same array
@@ -137,6 +141,13 @@ rule 2).
    `"date_updated": null`, which `job_manager.create_job` writes. Job files must
    round-trip between the two implementations (plan §9.3), so output is now byte-exact
    against `json.dump(..., indent = 4)`.
+7. **`EqualizeFrameColor` rounded where NumPy truncates.** `Mat.ConvertTo` to 8-bit uses
+   `saturate_cast`, which rounds; NumPy's `.astype(uint8)` truncates toward zero. Confirmed
+   reachable rather than theoretical: real fractional values captured out of the
+   OpenCvSharp pipeline (e.g. `88.57573`) become `88` under NumPy and `89` under
+   `ConvertTo`. Replaced with a bulk `GetArray`/`SetArray` round-trip using a plain
+   `(byte)` cast, which truncates toward zero like NumPy, and pinned all 48 channel values
+   in a test against the verified numbers.
 6. **Non-nullable `State` fields conflated "unset" with zero — and silently turned an
    unset face-selector gender into `auto`.** 13 fields whose `program.py` default is
    `config.get_*_value(section, option)` with no fallback (therefore `None`) were declared

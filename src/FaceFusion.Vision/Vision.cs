@@ -728,16 +728,20 @@ public static class Vision
     ///
     /// <para>
     /// The final <c>.clip(0, 255).astype(numpy.uint8)</c> in Python *truncates* toward zero
-    /// (numpy's float-to-int cast semantics), whereas <see cref="Mat.ConvertTo(Mat, MatType, double, double)"/>
-    /// to an 8-bit type *rounds* to the nearest integer (OpenCV's <c>saturate_cast</c>). That is
-    /// a genuine, documented parity gap: this method's output can differ from the Python's by up
-    /// to 1 per channel per pixel. It is not corrected here because doing so would require a
-    /// manual per-pixel floor pass (this method resizes to very small sizes for most of its
-    /// calls, but not for the final full-size call in <see cref="MatchFrameColor"/>, so a
-    /// per-pixel loop is not free), and every caller of this color-matching path
-    /// (<see cref="CalculateHistogramDifference"/>-gated blending, histogram-difference
-    /// comparisons in the tests) is tolerance-based rather than exact-value, so the 1-count
-    /// rounding difference does not change any observable outcome.
+    /// (numpy's float-to-int cast semantics — verified against a real numpy 2.4.6 interpreter:
+    /// e.g. <c>numpy.float32(88.57573).astype(numpy.uint8) == 88</c>, not 89). Converting the
+    /// clipped float Mat to 8-bit via <see cref="Mat.ConvertTo(Mat, MatType, double, double)"/>
+    /// instead *rounds* to the nearest integer (OpenCV's <c>saturate_cast</c>), which is a
+    /// genuine parity gap of up to 1 per channel per pixel — fixed here (see port report for the
+    /// concrete pixel values, captured from this method's own real interpolation output, that
+    /// were checked against numpy to confirm the divergence and pin the corrected behaviour in
+    /// <c>VisionTests.EqualizeFrameColorTruncatesTowardZero</c>). The fix reads every pixel back
+    /// as <see cref="Vec3f"/> via <see cref="Mat.GetArray{T}(out T[])"/> and truncates each
+    /// channel with a plain <c>(byte)</c> cast — C#'s float-to-integral conversion truncates
+    /// toward zero exactly like numpy's <c>astype</c>, so this is a direct behavioural match
+    /// rather than a manual floor/round reimplementation — then writes the result back in bulk
+    /// via <see cref="Mat.SetArray{T}(T[])"/> rather than looping over <see cref="Mat.At{T}"/>
+    /// pixel-by-pixel.
     /// </para>
     /// </summary>
     public static Mat EqualizeFrameColor(Mat sourceVisionFrame, Mat targetVisionFrame, Resolution size)
@@ -771,8 +775,20 @@ public static class Vision
         using var clipped = new Mat();
         Cv2.Min(clippedLow, 255.0, clipped);
 
-        var result = new Mat();
-        clipped.ConvertTo(result, MatType.CV_8UC3);
+        clipped.GetArray(out Vec3f[] clippedPixels);
+        var truncatedPixels = new Vec3b[clippedPixels.Length];
+
+        for (var index = 0; index < clippedPixels.Length; index++)
+        {
+            var pixel = clippedPixels[index];
+            // Values are already clipped to [0, 255], so a plain (byte) cast truncates
+            // toward zero the same way numpy's astype(uint8) does — see the method doc
+            // comment.
+            truncatedPixels[index] = new Vec3b((byte)pixel.Item0, (byte)pixel.Item1, (byte)pixel.Item2);
+        }
+
+        var result = new Mat(clipped.Size(), MatType.CV_8UC3);
+        result.SetArray(truncatedPixels);
         return result;
     }
 

@@ -343,6 +343,69 @@ public sealed class VisionTests : IClassFixture<VisionFixture>
         Assert.True(FaceFusion.Vision.Vision.CalculateHistogramDifference(source, target) < 0.5);
     }
 
+    /// <summary>
+    /// Pins <see cref="FaceFusion.Vision.Vision.EqualizeFrameColor"/>'s final float-to-uint8
+    /// conversion to numpy's truncate-toward-zero semantics rather than OpenCV's
+    /// round-to-nearest <c>saturate_cast</c>.
+    ///
+    /// <para>
+    /// The 4x4 source/target frames below (seeded with <see cref="Random"/>(12345), same
+    /// values reproduced inline here) make the <c>size = (2, 2)</c> intermediate resize
+    /// produce genuine fractional pixel values once the color-difference Mat is
+    /// CUBIC-upsampled back to 4x4 — this is the real, non-fabricated float32 output of this
+    /// method's own OpenCvSharp pipeline (captured once and recorded below), not a
+    /// hand-derived approximation of what CUBIC interpolation should produce. Every
+    /// <c>expected</c> byte below was independently computed by feeding that exact captured
+    /// float32 value through a real numpy 2.4.6 interpreter's
+    /// <c>numpy.array([...], dtype=numpy.float32).astype(numpy.uint8)</c> — e.g. pixel (0,0)'s
+    /// red channel is <c>88.57573f</c>, and <c>numpy.float32(88.57573).astype(numpy.uint8)</c>
+    /// is 88, not the 89 that <c>Mat.ConvertTo</c>'s rounding used to produce before the fix.
+    /// If this method's rounding regresses, every value that has a genuine fractional part
+    /// (nearly all of them here) will fail.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void EqualizeFrameColorTruncatesTowardZero()
+    {
+        using var source = new Mat(new Size(4, 4), MatType.CV_8UC3, Scalar.All(0));
+        using var target = new Mat(new Size(4, 4), MatType.CV_8UC3, Scalar.All(0));
+
+        var random = new Random(12345);
+
+        for (var y = 0; y < 4; y++)
+        {
+            for (var x = 0; x < 4; x++)
+            {
+                source.Set(y, x, new Vec3b((byte)random.Next(0, 256), (byte)random.Next(0, 256), (byte)random.Next(0, 256)));
+                target.Set(y, x, new Vec3b((byte)random.Next(0, 256), (byte)random.Next(0, 256), (byte)random.Next(0, 256)));
+            }
+        }
+
+        using var result = FaceFusion.Vision.Vision.EqualizeFrameColor(source, target, new Resolution(2, 2));
+
+        // Expected values: numpy.float32(<captured clipped value>).astype(numpy.uint8) for
+        // every channel of every pixel, verified against a real numpy 2.4.6 interpreter (see
+        // class doc comment above).
+        var expected = new byte[,,]
+        {
+            { { 88, 204, 221 }, { 83, 48, 71 }, { 135, 23, 136 }, { 77, 55, 52 } },
+            { { 127, 98, 87 }, { 73, 54, 194 }, { 94, 159, 66 }, { 58, 64, 140 } },
+            { { 58, 105, 178 }, { 0, 227, 84 }, { 12, 192, 24 }, { 142, 168, 189 } },
+            { { 46, 55, 86 }, { 162, 134, 204 }, { 37, 103, 244 }, { 159, 86, 133 } }
+        };
+
+        for (var y = 0; y < 4; y++)
+        {
+            for (var x = 0; x < 4; x++)
+            {
+                var pixel = result.At<Vec3b>(y, x);
+                Assert.Equal(expected[y, x, 0], pixel.Item0);
+                Assert.Equal(expected[y, x, 1], pixel.Item1);
+                Assert.Equal(expected[y, x, 2], pixel.Item2);
+            }
+        }
+    }
+
     [Fact]
     public void MatchFrameColor()
     {
