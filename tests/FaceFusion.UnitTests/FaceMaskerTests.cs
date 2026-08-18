@@ -29,6 +29,7 @@ namespace FaceFusion.UnitTests;
 /// enough to catch a real algorithm mismatch (e.g. a padding-order or threshold-direction bug).
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceMaskerTests
 {
     private const float Tolerance = 1e-4f;

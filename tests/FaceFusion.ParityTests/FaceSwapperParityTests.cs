@@ -37,6 +37,7 @@ namespace FaceFusion.ParityTests;
 /// per PARITY_HARNESS.md's "expect ~0 divergence" guidance for that tier.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceSwapperParityTests
 {
     private static string FixturesDirectory =>

@@ -34,6 +34,7 @@ namespace FaceFusion.ParityTests;
 /// (not loosened) tolerance is used per PARITY_HARNESS.md's "expect ~0 divergence" guidance.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class ProcessorParityTests3
 {
     private static string FixturesDirectory =>

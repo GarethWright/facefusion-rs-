@@ -59,6 +59,7 @@ namespace FaceFusion.ParityTests;
 /// case (~2e-7 relative, ~7e-5 absolute) rather than being padded defensively.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceDetectorParityTests
 {
     private static string FixturesDirectory =>

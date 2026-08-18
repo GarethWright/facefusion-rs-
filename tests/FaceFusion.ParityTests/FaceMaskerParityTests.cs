@@ -34,6 +34,7 @@ namespace FaceFusion.ParityTests;
 /// enough to catch a real preprocessing or postprocessing bug.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceMaskerParityTests
 {
     private static string FixturesDirectory =>

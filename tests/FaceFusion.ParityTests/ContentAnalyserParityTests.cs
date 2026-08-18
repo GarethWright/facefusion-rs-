@@ -41,6 +41,7 @@ namespace FaceFusion.ParityTests;
 /// are compared with <see cref="Assert.Equal(double, double, int)"/> at 4 decimal places.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class ContentAnalyserParityTests
 {
     private static string FixturesDirectory =>

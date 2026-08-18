@@ -29,6 +29,7 @@ namespace FaceFusion.UnitTests;
 /// not exact geometry.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceDetectorTests
 {
     // -----------------------------------------------------------------

@@ -103,6 +103,7 @@ public sealed class FaceCreatorSessionFixture : IDisposable
     public void Dispose() => Sessions?.Dispose();
 }
 
+[Collection("NativeInference")]
 public sealed class FaceCreatorTests : IClassFixture<FaceCreatorSessionFixture>
 {
     private const FaceDetectorModel DetectorModel = FaceDetectorModel.Many;

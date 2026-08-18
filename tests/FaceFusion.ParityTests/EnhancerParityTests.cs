@@ -73,6 +73,7 @@ namespace FaceFusion.ParityTests;
 /// </list>
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class EnhancerParityTests
 {
     private static string FixturesDirectory =>

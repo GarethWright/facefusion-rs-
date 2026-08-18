@@ -43,6 +43,7 @@ namespace FaceFusion.ParityTests;
 /// fudge factor.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class ProcessorParityTests2
 {
     private static string FixturesDirectory =>

@@ -16,6 +16,7 @@ namespace FaceFusion.UnitTests;
 /// cross-language parity for the same path lives in
 /// <c>tests/FaceFusion.ParityTests/FaceAnalysisParityTests.cs</c>.
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceClassifierTests
 {
     // -----------------------------------------------------------------

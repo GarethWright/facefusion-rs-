@@ -47,6 +47,7 @@ namespace FaceFusion.ParityTests;
 /// arithmetic is bit-for-bit regardless of the input's precision pedigree.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class AudioParityTests
 {
     private static string FixturesDirectory =>

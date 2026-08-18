@@ -15,6 +15,7 @@ namespace FaceFusion.UnitTests;
 /// <c>facefusion.processors.modules.face_enhancer</c> module in
 /// <c>tests/FaceFusion.ParityTests/EnhancerParityTests.cs</c>.
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceEnhancerTests
 {
     // -----------------------------------------------------------------

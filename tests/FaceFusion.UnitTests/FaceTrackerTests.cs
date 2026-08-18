@@ -89,6 +89,7 @@ public sealed class FaceTrackerSessionFixture : IDisposable
     public void Dispose() => Sessions?.Dispose();
 }
 
+[Collection("NativeInference")]
 public sealed class FaceTrackerTests : IClassFixture<FaceTrackerSessionFixture>
 {
     private const FaceDetectorModel DetectorModel = FaceDetectorModel.YoloFace;

@@ -35,6 +35,7 @@ namespace FaceFusion.UnitTests;
 /// <c>OrtValue</c>-based zero-copy Run() convention (DOTNET_PORT_PLAN.md §5.3) be demonstrated
 /// end to end rather than only asserted by type.
 /// </summary>
+[Collection("NativeInference")]
 public sealed class InferenceManagerTests
 {
     private const string TinyIdentityModelBase64 =

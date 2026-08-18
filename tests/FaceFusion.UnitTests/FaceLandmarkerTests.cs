@@ -16,6 +16,7 @@ namespace FaceFusion.UnitTests;
 /// <c>peppa_wutz</c>/<c>fan_68_5</c> models and a real detected face) lives in
 /// <c>tests/FaceFusion.ParityTests/FaceAnalysisParityTests.cs</c>.
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceLandmarkerTests
 {
     // -----------------------------------------------------------------

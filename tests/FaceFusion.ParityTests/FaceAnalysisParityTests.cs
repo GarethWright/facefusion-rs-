@@ -36,6 +36,7 @@ namespace FaceFusion.ParityTests;
 /// face end to end.
 /// </para>
 /// </summary>
+[Collection("NativeInference")]
 public sealed class FaceAnalysisParityTests
 {
     private static string FixturesDirectory =>
