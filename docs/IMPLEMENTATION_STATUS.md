@@ -63,6 +63,27 @@ Raising `TargetFramework` in `Directory.Build.props` is the whole migration.
 | — (new) | `Parity.TensorComparison` | vs real `numpy.allclose` |
 | — (new) | `Parity.ImageMetrics` | vs independent NumPy reference |
 
+## Deliberate deviations from the Python
+
+Recorded so they are choices rather than drift.
+
+- **The `cli`/`ui` state split is dropped.** `app_context.py` inspects the Python call
+  stack to decide whether the caller is under `jobs/` or `uis/`, and `state_manager.py`
+  keys its global dict on the answer. That exists solely to work around Gradio's threading
+  model (plan §3), so `app_context.py` is deliberately not ported.
+- **Module globals become instance state.** `process_manager.py` and `logger.py` both keep
+  module-level globals; the C# equivalents are instance classes with guarded fields, which
+  makes them testable and thread-safe. Tests construct one per case instead of resetting a
+  shared global.
+- **`ProcessManager.Manage()` is not a port.** It is an `IDisposable` convenience added on
+  top; `process_manager.py` has no context manager. Documented as such in the class so it
+  is not mistaken for parity.
+- **`Logger` does not use `Microsoft.Extensions.Logging`** as plan §2 maps it to, because
+  that needs a NuGet package and the foundation layers were kept dependency-free. It is a
+  minimal self-contained logger over the existing `LogLevel` enum. Revisit when the DI
+  container lands — that needs `Microsoft.Extensions.DependencyInjection` anyway, at which
+  point the abstractions package is no extra cost.
+
 ## Parity defects found and fixed
 
 Each of these was caught by a test or by the de-duplication pass rather than by reading
