@@ -28,6 +28,8 @@
     <ProjectReference Include="..\..\src\FaceFusion.Core\FaceFusion.Core.csproj" />
     <ProjectReference Include="..\..\src\FaceFusion.Media\FaceFusion.Media.csproj" />
     <ProjectReference Include="..\..\src\FaceFusion.Vision\FaceFusion.Vision.csproj" />
+    <ProjectReference Include="..\..\src\FaceFusion.Inference\FaceFusion.Inference.csproj" />
+    <ProjectReference Include="..\..\src\FaceFusion.Face\FaceFusion.Face.csproj" />
   </ItemGroup>
 
 </Project>
