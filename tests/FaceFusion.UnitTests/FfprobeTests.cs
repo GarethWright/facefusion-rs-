@@ -5,31 +5,101 @@ namespace FaceFusion.UnitTests;
 /// <summary>
 /// Port of tests/test_ffprobe.py.
 ///
-/// The Python suite downloads example media over the network and then asserts on
-/// ffprobe's real output (`test_extract_audio_metadata`, `test_extract_video_metadata`).
-/// Neither ffprobe nor the example media are available in this container (network egress
-/// restricted, binary not installed), so those two are ported but skipped per port
-/// convention rule 2. In their place, the parsing logic they exercise
-/// (<see cref="Ffprobe.ParseEntries"/>, <see cref="Ffprobe.ExtractVideoFps"/>) is tested
-/// directly against canned ffprobe output, which needs no binary at all — this is the
-/// part of the module most worth testing per the assignment brief, and it now has
-/// coverage the Python suite (which only exercises it indirectly through real output)
-/// does not.
+/// <para>
+/// Both preconditions the earlier port report cited against this file — no ffprobe
+/// binary, no example media — no longer hold (see docs/PORT_CONVENTIONS.md and
+/// <c>tools/parity/fetch_examples.sh</c>), so <see cref="TestExtractAudioMetadata"/> and
+/// <see cref="TestExtractVideoMetadata"/> now run for real, gated on
+/// <see cref="MediaFactAttribute"/> so the suite still degrades to a clear runtime skip in
+/// an environment that genuinely lacks either. <see cref="MediaFixtures.Ensure"/> (called
+/// from the constructor below) generates <c>source-48000khz-2ch.wav</c> and
+/// <c>target-240p-1s.{mkv,mov}</c>, the same derived fixtures Python's module-scoped
+/// <c>before_all</c> produces for this file.
+/// </para>
+///
+/// The parsing logic (<see cref="Ffprobe.ParseEntries"/>, <see cref="Ffprobe.ExtractVideoFps"/>)
+/// stays covered directly against canned ffprobe output below too — it has no standalone
+/// Python test (only exercised indirectly through real ffprobe output) and needs no binary
+/// at all.
 /// </summary>
 public sealed class FfprobeTests
 {
-	[Fact(Skip = "requires example media (network download restricted in this container)")]
-	public void TestExtractAudioMetadata()
+	public FfprobeTests()
 	{
-		// Python: test_extract_audio_metadata — asserts sample_rate/channel_total/
-		// frame_total/bit_rate for source.mp3 and source-48000khz-2ch.wav.
+		MediaFixtures.Ensure();
 	}
 
-	[Fact(Skip = "requires example media (network download restricted in this container)")]
+	[MediaFact]
+	public void TestExtractAudioMetadata()
+	{
+		var audioMetadata = Ffprobe.ExtractAudioMetadata(TestHelper.GetTestExampleFile("source.mp3"));
+
+		Assert.Equal(44100, audioMetadata.SampleRate);
+		Assert.Equal(1, audioMetadata.ChannelTotal);
+		Assert.Equal(167040, audioMetadata.FrameTotal);
+		Assert.Equal(128000, audioMetadata.BitRate);
+
+		audioMetadata = Ffprobe.ExtractAudioMetadata(TestHelper.GetTestExampleFile("source-48000khz-2ch.wav"));
+
+		Assert.Equal(48000, audioMetadata.SampleRate);
+		Assert.Equal(2, audioMetadata.ChannelTotal);
+		Assert.Equal(91200, audioMetadata.FrameTotal);
+		Assert.Equal(1536328, audioMetadata.BitRate);
+	}
+
+	[MediaFact]
 	public void TestExtractVideoMetadata()
 	{
-		// Python: test_extract_video_metadata — asserts fps/duration/resolution/bit_rate/
-		// color_transfer for target-240p.mp4, target-240p-1s.mkv, target-240p-1s.mov.
+		var videoMetadata = Ffprobe.ExtractVideoMetadata(TestHelper.GetTestExampleFile("target-240p.mp4"));
+
+		Assert.Equal(25.0, videoMetadata.Fps);
+		Assert.Equal(10.8, videoMetadata.Duration);
+		Assert.Equal(new FaceFusion.Types.Resolution(426, 226), videoMetadata.Resolution);
+		Assert.Equal(141981, videoMetadata.BitRate);
+		Assert.Equal("smpte170m", videoMetadata.ColorTransfer);
+
+		videoMetadata = Ffprobe.ExtractVideoMetadata(TestHelper.GetTestExampleFile("target-240p-1s.mkv"));
+
+		Assert.Equal(25.0, videoMetadata.Fps);
+		Assert.Equal(1.0, videoMetadata.Duration);
+		Assert.Equal(25, videoMetadata.FrameTotal);
+		Assert.Equal(new FaceFusion.Types.Resolution(426, 226), videoMetadata.Resolution);
+
+		videoMetadata = Ffprobe.ExtractVideoMetadata(TestHelper.GetTestExampleFile("target-240p-1s.mov"));
+
+		Assert.Equal(25.0, videoMetadata.Fps);
+		Assert.Equal(1.0, videoMetadata.Duration);
+		Assert.Equal(new FaceFusion.Types.Resolution(426, 226), videoMetadata.Resolution);
+	}
+
+	// --- missing-binary contract: crash is faithful Python parity, not a bug -----------
+	// See Ffprobe.ExtractAudioMetadata/ExtractVideoMetadata's doc comments. Forced
+	// deterministically via the ffprobePath override (see FfprobeBuilder.Run's doc
+	// comment) rather than assumed from the machine, since ffprobe may genuinely be
+	// installed here.
+
+	[Fact]
+	public void TestExtractAudioMetadataThrowsWhenFfprobeBinaryMissing()
+	{
+		// Python: format_entries.get('duration') is None when ffprobe produced no output,
+		// and float(None) raises TypeError — extract_audio_metadata was never designed to
+		// degrade gracefully when the binary itself is missing (as opposed to the empty
+		// dict path ProbeFormatEntries/ProbeAudioEntries/ProbeVideoEntries already handle
+		// gracefully, e.g. TestProbeFormatEntriesGracefulWhenBinaryNotFound below). The C#
+		// port throws KeyNotFoundException from the same dictionary access instead of
+		// TypeError — a different exception type (C# has no equivalent to indexing None),
+		// but the same "this is not a supported configuration, it throws" contract. Per
+		// port convention rule 1, this is faithful parity and is deliberately not "fixed"
+		// into a graceful null/default return.
+		Assert.Throws<KeyNotFoundException>(() =>
+			Ffprobe.ExtractAudioMetadata(TestHelper.GetTestExampleFile("source.mp3"), TestHelper.BogusBinaryPath));
+	}
+
+	[Fact]
+	public void TestExtractVideoMetadataThrowsWhenFfprobeBinaryMissing()
+	{
+		Assert.Throws<KeyNotFoundException>(() =>
+			Ffprobe.ExtractVideoMetadata(TestHelper.GetTestExampleFile("target-240p.mp4"), TestHelper.BogusBinaryPath));
 	}
 
 	// --- Ffprobe.ParseEntries -------------------------------------------------------
@@ -137,11 +207,13 @@ public sealed class FfprobeTests
 	[Fact]
 	public void TestRunFfprobeReturnsNullWhenBinaryNotFound()
 	{
-		// ffprobe is not installed in this container, so FfprobeBuilder.Run resolves the
-		// executable path to null (Which() returning null, mirroring shutil.which). This
-		// exercises the "binary not found" path for real: RunFfprobe must degrade to null
-		// instead of throwing an unhandled exception starting the process.
-		var process = Ffprobe.RunFfprobe(FfprobeBuilder.SetInput("media.mp4"));
+		// ffprobe may genuinely be installed in this environment (see
+		// docs/PORT_CONVENTIONS.md), so the "not found" path is forced deterministically
+		// via the ffprobePath override (see FfprobeBuilder.Run's doc comment) instead of
+		// relying on the machine's PATH. This exercises the "binary not found" path for
+		// real: RunFfprobe must degrade to null instead of throwing an unhandled exception
+		// starting the process.
+		var process = Ffprobe.RunFfprobe(FfprobeBuilder.SetInput("media.mp4"), TestHelper.BogusBinaryPath);
 
 		Assert.Null(process);
 	}
@@ -152,7 +224,7 @@ public sealed class FfprobeTests
 		// probe_format_entries -> run_ffprobe -> communicate() -> parse_entries. With no
 		// ffprobe binary present this must come back as an empty dictionary rather than
 		// throw, all the way through the public entry point.
-		var entries = Ffprobe.ProbeFormatEntries("media.mp4", new[] { "duration", "bit_rate" });
+		var entries = Ffprobe.ProbeFormatEntries("media.mp4", new[] { "duration", "bit_rate" }, TestHelper.BogusBinaryPath);
 
 		Assert.Empty(entries);
 	}

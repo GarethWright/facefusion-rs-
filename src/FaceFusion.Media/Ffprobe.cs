@@ -80,7 +80,8 @@ public static class Ffprobe
 			FfprobeBuilder.FormatToKeyValue(),
 			FfprobeBuilder.SetInput(audioPath));
 
-		var output = ProcessRunner.Communicate(RunFfprobe(commands, ffprobePath)).Stdout;
+		using var process = RunFfprobe(commands, ffprobePath);
+		var output = ProcessRunner.Communicate(process).Stdout;
 		return ParseEntries(output);
 	}
 
@@ -93,7 +94,8 @@ public static class Ffprobe
 			FfprobeBuilder.FormatToKeyValue(),
 			FfprobeBuilder.SetInput(videoPath));
 
-		var output = ProcessRunner.Communicate(RunFfprobe(commands, ffprobePath)).Stdout;
+		using var process = RunFfprobe(commands, ffprobePath);
+		var output = ProcessRunner.Communicate(process).Stdout;
 		return ParseEntries(output);
 	}
 
@@ -105,7 +107,8 @@ public static class Ffprobe
 			FfprobeBuilder.FormatToKeyValue(),
 			FfprobeBuilder.SetInput(mediaPath));
 
-		var output = ProcessRunner.Communicate(RunFfprobe(commands, ffprobePath)).Stdout;
+		using var process = RunFfprobe(commands, ffprobePath);
+		var output = ProcessRunner.Communicate(process).Stdout;
 		return ParseEntries(output);
 	}
 

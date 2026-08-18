@@ -18,20 +18,34 @@ public class ProcessHelperTests
 		Assert.Equal("curl", Path.GetFileName(result));
 	}
 
-	[Theory]
-	[InlineData("ffmpeg")]
-	[InlineData("ffprobe")]
-	public void TestWhichReturnsNullWhenNotFound(string executable)
+	[Fact]
+	public void TestWhichFindsFfmpegAndFfprobeWhenInstalled()
 	{
-		// ffmpeg/ffprobe are deliberately absent from this container so both the found
-		// and not-found paths of shutil.which get exercised.
-		Assert.Null(ProcessHelper.Which(executable));
+		// ffmpeg/ffprobe are installed in this container (see docs/PORT_CONVENTIONS.md /
+		// the Phase 2 milestone), so the "not found" case for these two specific names is
+		// no longer a property of this environment and cannot be asserted here — see
+		// TestWhichReturnsNullForBogusExecutable below for the "not found" path, exercised
+		// with a name that genuinely can never resolve on any machine.
+		if (TestHelper.HasFfmpeg)
+		{
+			Assert.NotNull(ProcessHelper.Which("ffmpeg"));
+		}
+
+		if (TestHelper.HasFfprobe)
+		{
+			Assert.NotNull(ProcessHelper.Which("ffprobe"));
+		}
 	}
 
 	[Fact]
 	public void TestWhichReturnsNullForBogusExecutable()
 	{
-		Assert.Null(ProcessHelper.Which("this-executable-does-not-exist-anywhere"));
+		// A GUID-based name can never collide with a real installed tool, unlike a
+		// plausible-sounding placeholder string, so this holds regardless of what happens
+		// to be on PATH in any given environment.
+		var bogusExecutableName = "this-executable-does-not-exist-" + Guid.NewGuid().ToString("N");
+
+		Assert.Null(ProcessHelper.Which(bogusExecutableName));
 	}
 
 	[Fact]

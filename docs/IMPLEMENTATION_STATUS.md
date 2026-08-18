@@ -2,15 +2,15 @@
 
 Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as phases land.
 
-**Current state: Phases 0–2 complete.** Clean build with 0 warnings and 0 errors;
-**433 tests passing** (375 unit + 58 parity), 9 skipped. OpenCV is in use via OpenCvSharp;
-ONNX Runtime and the face pipeline are Phases 3–5 and remain unstarted.
+**Current state: Phases 0–3 complete, Phase 4 begun.** Clean build with 0 warnings and
+0 errors; **600 tests passing** (516 unit + 84 parity), 2 skipped.
 
-The Phase 2 milestone is met in code: `ExtractFrames`, `MergeVideo`, `ConcatVideo`,
-`RestoreAudio`, `ReplaceAudio`, `CopyImage`, `FinalizeImage`, `ReadAudioBuffer` and the
-video reader/writer are ported. It is **not** verified end to end, because ffmpeg is not
-installed here — command construction and graceful degradation are tested, an actual
-encode round-trip is not.
+The Phase 2 milestone is now **verified end to end**, not just in code: ffmpeg is
+installed, the example media are present, and `Phase2MilestoneTests` extracts frames from
+a real video, writes them back, remerges and restores audio. Phase 3 (execution providers,
+inference pool, ONNX model reader) is done, including a real ONNX Runtime session running
+CPU inference through the `OrtValue` zero-copy path. Phase 4 has `face_helper` ported with
+53 tests, every one against real numpy/cv2 ground truth.
 
 ## Environment: the real Python pipeline now runs here
 

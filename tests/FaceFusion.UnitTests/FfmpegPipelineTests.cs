@@ -333,7 +333,11 @@ public sealed class FfmpegPipelineTests
     [Fact]
     public void CreateVideoReaderIsUnavailableWithoutFfmpeg()
     {
-        using var reader = Ffmpeg.CreateVideoReader("target.mp4", 0, SampleVideoMetadata);
+        // ffmpeg may genuinely be installed in this environment (see docs/PORT_CONVENTIONS.md),
+        // so "without ffmpeg" is forced deterministically via the ffmpegPath override
+        // (see FfmpegBuilder.Run's doc comment) rather than by relying on the machine's
+        // PATH, which is not a property of the code under test.
+        using var reader = Ffmpeg.CreateVideoReader("target.mp4", 0, SampleVideoMetadata, TestHelper.BogusBinaryPath);
 
         Assert.False(reader.IsAvailable);
         Assert.Null(reader.StandardOutput);
@@ -354,9 +358,11 @@ public sealed class FfmpegPipelineTests
     [Fact]
     public void CreateVideoWriterIsUnavailableWithoutFfmpeg()
     {
+        // See CreateVideoReaderIsUnavailableWithoutFfmpeg above for why the binary path is
+        // forced rather than assumed absent.
         using var writer = Ffmpeg.CreateVideoWriter(
             "target.mp4", 25.0, new Resolution(640, 480), new Resolution(640, 480), 25.0,
-            VideoEncoder.Libx264, 80, VideoPreset.Medium, TempPixelFormat.Bgr24, Path.GetTempPath());
+            VideoEncoder.Libx264, 80, VideoPreset.Medium, TempPixelFormat.Bgr24, Path.GetTempPath(), TestHelper.BogusBinaryPath);
 
         Assert.False(writer.IsAvailable);
         Assert.Null(writer.StandardInput);

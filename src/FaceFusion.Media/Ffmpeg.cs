@@ -198,7 +198,17 @@ public static class Ffmpeg
 		var audioEncoders = new List<AudioEncoder>();
 		var videoEncoders = new List<VideoEncoder>();
 		var commands = FfmpegBuilder.Chain(FfmpegBuilder.GetEncoders());
-		var process = RunFfmpeg(commands, processManager, logger, logLevel, ffmpegPath);
+		// Disposed via `using` (deliberate port-only fix, not present in Python — a bare
+		// subprocess.Popen has no explicit .close() call to port either — see port report):
+		// every RunFfmpeg/RunFfmpegWithProgress call site in this file used to leak the
+		// returned Process (and its redirected stdout/stderr pipe handles) until the next
+		// GC, which is exactly the kind of leak that only shows up under sustained load —
+		// confirmed via a long real test run that spawns several hundred ffmpeg/ffprobe
+		// subprocesses back to back, where a handful of otherwise-correct calls started
+		// failing sporadically partway through. Disposing here (and at every other
+		// fire-and-forget call site below) keeps each subprocess's OS handles bounded to
+		// its own call instead of accumulating for the process's lifetime.
+		using var process = RunFfmpeg(commands, processManager, logger, logLevel, ffmpegPath);
 
 		if (process is null)
 		{
@@ -415,7 +425,7 @@ public static class Ffmpeg
 		var tempFramePattern = TempHelper.GetTempFramePattern(targetPath, "%08d", tempPath, tempFrameFormat);
 
 		var commands = BuildExtractFramesCommands(targetPath, tempVideoResolution, tempVideoFps, trimFrameStart, trimFrameEnd, colorTransfer, tempFramePattern);
-		var process = RunFfmpegWithProgress(commands, updateProgress, processManager, logger, logLevel);
+		using var process = RunFfmpegWithProgress(commands, updateProgress, processManager, logger, logLevel);
 		return process is not null && process.ExitCode == 0;
 	}
 
@@ -445,7 +455,7 @@ public static class Ffmpeg
 	{
 		var tempImagePath = TempHelper.GetTempFilePath(targetPath, tempPath);
 		var commands = BuildCopyImageCommands(targetPath, tempImageResolution, tempImagePath);
-		var process = RunFfmpeg(commands, processManager, logger, logLevel);
+		using var process = RunFfmpeg(commands, processManager, logger, logLevel);
 		return process is not null && process.ExitCode == 0;
 	}
 
@@ -464,7 +474,7 @@ public static class Ffmpeg
 	{
 		var tempImagePath = TempHelper.GetTempFilePath(targetPath, tempPath);
 		var commands = BuildFinalizeImageCommands(targetPath, tempImagePath, outputPath, outputImageResolution, outputImageQuality);
-		var process = RunFfmpeg(commands, processManager, logger, logLevel);
+		using var process = RunFfmpeg(commands, processManager, logger, logLevel);
 		return process is not null && process.ExitCode == 0;
 	}
 
@@ -538,7 +548,7 @@ public static class Ffmpeg
 		var resolvedAudioEncoder = ResolveAudioEncoder(tempVideoFormat, outputAudioEncoder);
 
 		var commands = BuildRestoreAudioCommands(tempVideoPath, targetPath, outputPath, trimFrameStart, trimFrameEnd, targetVideoFps, resolvedAudioEncoder, outputAudioQuality, outputAudioVolume, tempVideoDuration, outputVideoFormat);
-		var process = RunFfmpeg(commands, processManager, logger, logLevel);
+		using var process = RunFfmpeg(commands, processManager, logger, logLevel);
 		return process is not null && process.ExitCode == 0;
 	}
 
@@ -582,7 +592,7 @@ public static class Ffmpeg
 		var resolvedAudioEncoder = ResolveAudioEncoder(tempVideoFormat, outputAudioEncoder);
 
 		var commands = BuildReplaceAudioCommands(tempVideoPath, audioPath, outputPath, resolvedAudioEncoder, outputAudioQuality, outputAudioVolume, tempVideoDuration, outputVideoFormat);
-		var process = RunFfmpeg(commands, processManager, logger, logLevel);
+		using var process = RunFfmpeg(commands, processManager, logger, logLevel);
 		return process is not null && process.ExitCode == 0;
 	}
 
@@ -630,7 +640,7 @@ public static class Ffmpeg
 		var resolvedVideoEncoder = ResolveVideoEncoder(tempVideoFormat, outputVideoEncoder);
 
 		var commands = BuildMergeVideoCommands(tempVideoPath, tempVideoFormat, tempVideoFps, trimFrameStart, tempFramePattern, outputVideoResolution, resolvedVideoEncoder, outputVideoQuality, outputVideoPreset, outputVideoFps);
-		var process = RunFfmpegWithProgress(commands, updateProgress, processManager, logger, logLevel);
+		using var process = RunFfmpegWithProgress(commands, updateProgress, processManager, logger, logLevel);
 		return process is not null && process.ExitCode == 0;
 	}
 
@@ -678,7 +688,7 @@ public static class Ffmpeg
 		var outputVideoFormat = FileSystem.GetFileFormat(resolvedOutputPath) ?? string.Empty;
 
 		var commands = BuildConcatVideoCommands(concatVideoPath, resolvedOutputPath, outputVideoFormat);
-		var process = RunFfmpeg(commands, processManager, logger, logLevel);
+		using var process = RunFfmpeg(commands, processManager, logger, logLevel);
 		// Python: process.communicate() drains any output run_ffmpeg's wait loop left
 		// unread before checking returncode; ProcessRunner.Communicate does the same here
 		// without the deadlock risk of a synchronous read (see its doc comment).
