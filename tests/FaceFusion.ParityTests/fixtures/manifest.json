@@ -1,0 +1,608 @@
+{
+    "big_endian_float32": {
+        "byte_order": ">",
+        "dtype": "float32",
+        "element_count": 4,
+        "fortran_order": false,
+        "shape": [
+            4
+        ],
+        "values_c_order": [
+            "0.0",
+            "1.0",
+            "2.0",
+            "3.0"
+        ]
+    },
+    "dtype_bool": {
+        "byte_order": "|",
+        "dtype": "bool",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            false,
+            true,
+            true,
+            true,
+            true,
+            true
+        ]
+    },
+    "dtype_float32": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            "0.0",
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            "5.0"
+        ]
+    },
+    "dtype_float64": {
+        "byte_order": "=",
+        "dtype": "float64",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            "0.0",
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            "5.0"
+        ]
+    },
+    "dtype_int16": {
+        "byte_order": "=",
+        "dtype": "int16",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+        ]
+    },
+    "dtype_int32": {
+        "byte_order": "=",
+        "dtype": "int32",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+        ]
+    },
+    "dtype_int64": {
+        "byte_order": "=",
+        "dtype": "int64",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+        ]
+    },
+    "dtype_int8": {
+        "byte_order": "|",
+        "dtype": "int8",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+        ]
+    },
+    "dtype_uint16": {
+        "byte_order": "=",
+        "dtype": "uint16",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+        ]
+    },
+    "dtype_uint32": {
+        "byte_order": "=",
+        "dtype": "uint32",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+        ]
+    },
+    "dtype_uint64": {
+        "byte_order": "=",
+        "dtype": "uint64",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+        ]
+    },
+    "dtype_uint8": {
+        "byte_order": "|",
+        "dtype": "uint8",
+        "element_count": 6,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+        ]
+    },
+    "empty_1d": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 0,
+        "fortran_order": false,
+        "shape": [
+            0
+        ],
+        "values_c_order": []
+    },
+    "empty_2d": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 0,
+        "fortran_order": false,
+        "shape": [
+            0,
+            3
+        ],
+        "values_c_order": []
+    },
+    "format_v2_header": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 6,
+        "fortran_order": false,
+        "npy_version": "2.0",
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            "0.0",
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            "5.0"
+        ]
+    },
+    "format_v3_header": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 6,
+        "fortran_order": false,
+        "npy_version": "3.0",
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            "0.0",
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            "5.0"
+        ]
+    },
+    "fortran_order": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 6,
+        "fortran_order": true,
+        "shape": [
+            2,
+            3
+        ],
+        "values_c_order": [
+            "0.0",
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            "5.0"
+        ]
+    },
+    "frame_like_bgr": {
+        "byte_order": "|",
+        "dtype": "uint8",
+        "element_count": 192,
+        "fortran_order": false,
+        "shape": [
+            8,
+            8,
+            3
+        ],
+        "values_c_order": [
+            102,
+            116,
+            82,
+            103,
+            18,
+            60,
+            168,
+            252,
+            119,
+            220,
+            93,
+            10,
+            158,
+            9,
+            50,
+            7,
+            160,
+            172,
+            68,
+            130,
+            159,
+            103,
+            114,
+            60,
+            151,
+            54,
+            126,
+            144,
+            249,
+            92,
+            237,
+            119,
+            31,
+            140,
+            96,
+            88,
+            185,
+            30,
+            38,
+            19,
+            253,
+            209,
+            165,
+            86,
+            204,
+            200,
+            111,
+            53,
+            15,
+            62,
+            122,
+            118,
+            121,
+            143,
+            218,
+            170,
+            135,
+            158,
+            28,
+            202,
+            62,
+            14,
+            220,
+            223,
+            140,
+            131,
+            254,
+            155,
+            251,
+            72,
+            142,
+            43,
+            131,
+            232,
+            86,
+            147,
+            250,
+            47,
+            87,
+            236,
+            11,
+            8,
+            118,
+            184,
+            101,
+            30,
+            217,
+            136,
+            218,
+            162,
+            95,
+            95,
+            81,
+            143,
+            12,
+            160,
+            17,
+            190,
+            18,
+            178,
+            146,
+            91,
+            133,
+            3,
+            175,
+            134,
+            19,
+            0,
+            91,
+            240,
+            90,
+            101,
+            162,
+            85,
+            105,
+            23,
+            190,
+            47,
+            133,
+            13,
+            137,
+            198,
+            227,
+            164,
+            79,
+            98,
+            250,
+            153,
+            95,
+            42,
+            112,
+            125,
+            45,
+            86,
+            30,
+            196,
+            171,
+            54,
+            121,
+            25,
+            154,
+            208,
+            135,
+            25,
+            225,
+            116,
+            39,
+            5,
+            23,
+            31,
+            153,
+            170,
+            45,
+            73,
+            193,
+            167,
+            109,
+            217,
+            74,
+            23,
+            122,
+            0,
+            151,
+            161,
+            86,
+            2,
+            67,
+            221,
+            167,
+            57,
+            158,
+            133,
+            166,
+            218,
+            6,
+            229,
+            236,
+            203,
+            70,
+            119,
+            103,
+            174,
+            208,
+            245,
+            181,
+            181,
+            23,
+            202,
+            175,
+            75,
+            23,
+            45
+        ]
+    },
+    "rank0_scalar": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 1,
+        "fortran_order": false,
+        "shape": [],
+        "values_c_order": [
+            "42.5"
+        ]
+    },
+    "rank1_vector": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 5,
+        "fortran_order": false,
+        "shape": [
+            5
+        ],
+        "values_c_order": [
+            "0.0",
+            "0.25",
+            "0.5",
+            "0.75",
+            "1.0"
+        ]
+    },
+    "rank3_hwc": {
+        "byte_order": "|",
+        "dtype": "uint8",
+        "element_count": 24,
+        "fortran_order": false,
+        "shape": [
+            2,
+            3,
+            4
+        ],
+        "values_c_order": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+        ]
+    },
+    "rank4_nchw": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 16,
+        "fortran_order": false,
+        "shape": [
+            1,
+            2,
+            2,
+            4
+        ],
+        "values_c_order": [
+            "0.0",
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            "5.0",
+            "6.0",
+            "7.0",
+            "8.0",
+            "9.0",
+            "10.0",
+            "11.0",
+            "12.0",
+            "13.0",
+            "14.0",
+            "15.0"
+        ]
+    },
+    "special_values": {
+        "byte_order": "=",
+        "dtype": "float32",
+        "element_count": 7,
+        "fortran_order": false,
+        "shape": [
+            7
+        ],
+        "values_c_order": [
+            "nan",
+            "inf",
+            "-inf",
+            "0.0",
+            "-0.0",
+            "1.401298464324817e-45",
+            "3.4028234663852886e+38"
+        ]
+    }
+}
