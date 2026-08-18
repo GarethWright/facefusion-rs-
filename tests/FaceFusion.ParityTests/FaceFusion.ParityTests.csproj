@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\src\FaceFusion.Types\FaceFusion.Types.csproj" />
     <ProjectReference Include="..\..\src\FaceFusion.Inference\FaceFusion.Inference.csproj" />
     <ProjectReference Include="..\..\src\FaceFusion.Face\FaceFusion.Face.csproj" />
+    <ProjectReference Include="..\..\src\FaceFusion.Processors\FaceFusion.Processors.csproj" />
   </ItemGroup>
 
 
