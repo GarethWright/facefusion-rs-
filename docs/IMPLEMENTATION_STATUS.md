@@ -12,7 +12,7 @@ Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as pha
 | 3 Inference layer | complete (CPU verified; GPU providers unverified — no GPU here) |
 | 4 Face pipeline | complete, verified against real ONNX inference |
 | 5 Processors | complete — 11/11 plus the audio layer |
-| 6 Workflows, jobs, CLI | workflows and jobs complete; CLI runs the job commands and interoperates with Python. `headless-run`/`batch-run` not yet wired to the workflow |
+| 6 Workflows, jobs, CLI | workflows, jobs and CLI complete; `headless-run` produces real video verified against Python. Only `frame_colorizer` is wired to the processor factory so far |
 | 7 UI (Blazor) | **not started** |
 | 8 Streaming / webcam | **not started** |
 | 9 Performance tuning | **not started** (deliberately sequenced after parity) |
@@ -193,6 +193,32 @@ cores. **Do not run it from several agents at once.** Doing so once drove load a
 71 on a 4-core box, at which point every run starved and the whole thing appeared to hang.
 Iterate with `--filter` on the tests you are changing and leave full-suite verification to
 one runner.
+
+## The CLI runs, and matches Python
+
+`headless-run` produces a real video end to end. Verified by running both CLIs with
+identical arguments:
+
+```
+dotnet run --project src/FaceFusion.Cli -- headless-run \
+    -t /tmp/facefusion-test-examples/target-240p.mp4 -o out.mp4 \
+    --processors frame_colorizer --trim-frame-end 8
+```
+
+| | C# | Python |
+| --- | --- | --- |
+| Output | 426x226, 25fps, 8 frames | identical |
+| Log lines | 3, line-for-line identical | — |
+| Frame diff | PSNR 43.7 dB, max 16/255 | consistent with two independent libx264 encodes |
+| Warm runtime | 25.3 s | 49.3 s |
+
+The ~1.95x is one small CPU-only workload on a tiny model, where orchestration overhead
+weighs heavier than it would on a long 1080p job — it is a data point, not a benchmark.
+The first Python run took 105 s but included model downloads; re-running warm is what makes
+the comparison fair.
+
+Job files written by the C# CLI are validated and read back by the real Python
+`job_manager`, and vice versa.
 
 ## Parity defects found and fixed
 
