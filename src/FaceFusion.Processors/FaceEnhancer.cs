@@ -578,4 +578,118 @@ public static class FaceEnhancer
         var resultVisionFrame = ownsCurrentVisionFrame ? currentVisionFrame : tempVisionFrame.Clone();
         return (resultVisionFrame, tempVisionMask);
     }
+
+    // -----------------------------------------------------------------
+    // IProcessor adapter
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// Python: <c>face_enhancer/core.py</c>'s <c>process_frame</c> inputs, widened with the
+    /// settings the module would have read off <c>state_manager</c> — see
+    /// <see cref="IProcessorInputs"/>'s remarks.
+    /// </summary>
+    public sealed record FaceEnhancerInputs(
+        Mat ReferenceVisionFrame,
+        IReadOnlyList<Mat> SourceVisionFrames,
+        IReadOnlyList<Mat> TargetVisionFrames,
+        Mat TempVisionFrame,
+        Mat TempVisionMask,
+        ModelOptions ModelOptions,
+        InferenceSession FaceEnhancerSession,
+        double FaceEnhancerWeight,
+        double FaceEnhancerBlend,
+        IReadOnlyList<FaceMaskType> FaceMaskTypes,
+        double FaceMaskBlur,
+        FaceOccluderModel FaceOccluderModel,
+        IReadOnlyDictionary<string, InferenceSession> OccluderInferencePool,
+        FaceSelectorMode FaceSelectorMode,
+        double FaceTrackerScore,
+        FaceSelectorOrder FaceSelectorOrder,
+        FaceSelectorGender? FaceSelectorGender,
+        FaceSelectorRace? FaceSelectorRace,
+        int? FaceSelectorAgeStart,
+        int? FaceSelectorAgeEnd,
+        int ReferenceFacePosition,
+        double ReferenceFaceDistance,
+        Func<IReadOnlyList<Mat>, IReadOnlyList<Types.Face>> GetStaticFaces,
+        Func<IReadOnlyList<Types.Face?>, IReadOnlyList<Types.Face>> RefillFaces) : IProcessorInputs;
+
+    /// <summary>
+    /// Python: <c>facefusion/processors/modules/face_enhancer/core.py</c>'s module-level
+    /// functions, adapted to the <see cref="IProcessor"/> contract — see
+    /// <c>FaceSwapper.Processor</c> for the same pattern.
+    /// </summary>
+    public sealed class Processor : IProcessor
+    {
+        /// <inheritdoc />
+        public string Name => "face_enhancer";
+
+        /// <inheritdoc />
+        public IReadOnlyList<string> GetCommonModules() =>
+            new[] { "content_analyser", "face_classifier", "face_detector", "face_landmarker", "face_masker", "face_recognizer" };
+
+        /// <summary>Python: the <c>face_enhancer</c>-specific half of <c>pre_check</c>. Takes the
+        /// chosen model because the parameterless <see cref="IProcessor.PreCheck"/> member has no
+        /// <c>state_manager</c> to read it from.</summary>
+        public bool PreCheck(FaceEnhancerModel model) => FaceEnhancer.PreCheck(model);
+
+        /// <inheritdoc />
+        bool IProcessor.PreCheck() => throw new InvalidOperationException(
+            "face_enhancer.PreCheck requires a FaceEnhancerModel (no state_manager to read it from — call the FaceEnhancerModel overload instead).");
+
+        /// <summary>
+        /// Python: <c>pre_process(mode)</c>. Filesystem validation is out of scope (the same gap
+        /// <c>FaceSwapper.Processor.PreProcess</c> documents); <c>face_enhancer</c> has no
+        /// source-path requirement of its own, so nothing else remains to check.
+        /// </summary>
+        public bool PreProcess(ProcessMode mode, ProcessorRunPaths paths)
+        {
+            _ = mode;
+            _ = paths;
+            return true;
+        }
+
+        /// <inheritdoc />
+        public ProcessorOutputs ProcessFrame(IProcessorInputs inputs)
+        {
+            if (inputs is not FaceEnhancerInputs faceEnhancerInputs)
+            {
+                throw new ArgumentException($"expected {nameof(FaceEnhancerInputs)}, got {inputs.GetType().Name}.", nameof(inputs));
+            }
+
+            var (visionFrame, mask) = FaceEnhancer.ProcessFrame(
+                faceEnhancerInputs.ReferenceVisionFrame,
+                faceEnhancerInputs.SourceVisionFrames,
+                faceEnhancerInputs.TargetVisionFrames,
+                faceEnhancerInputs.TempVisionFrame,
+                faceEnhancerInputs.TempVisionMask,
+                faceEnhancerInputs.FaceSelectorMode,
+                faceEnhancerInputs.FaceTrackerScore,
+                faceEnhancerInputs.FaceSelectorOrder,
+                faceEnhancerInputs.FaceSelectorGender,
+                faceEnhancerInputs.FaceSelectorRace,
+                faceEnhancerInputs.FaceSelectorAgeStart,
+                faceEnhancerInputs.FaceSelectorAgeEnd,
+                faceEnhancerInputs.ReferenceFacePosition,
+                faceEnhancerInputs.ReferenceFaceDistance,
+                faceEnhancerInputs.GetStaticFaces,
+                faceEnhancerInputs.RefillFaces,
+                faceEnhancerInputs.FaceMaskBlur,
+                faceEnhancerInputs.FaceMaskTypes,
+                faceEnhancerInputs.FaceOccluderModel,
+                faceEnhancerInputs.OccluderInferencePool,
+                faceEnhancerInputs.ModelOptions,
+                faceEnhancerInputs.FaceEnhancerSession,
+                faceEnhancerInputs.FaceEnhancerWeight,
+                faceEnhancerInputs.FaceEnhancerBlend);
+
+            return new ProcessorOutputs(visionFrame, mask);
+        }
+
+        /// <summary>Python: <c>post_process()</c>. Cache clearing is out of scope without a real
+        /// pool owner to clear (rule 5), same as every other processor here.</summary>
+        public void PostProcess()
+        {
+        }
+    }
 }

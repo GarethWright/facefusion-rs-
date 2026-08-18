@@ -557,4 +557,80 @@ public static class FrameEnhancer
 
         return (enhancedVisionFrame, resizedMask);
     }
+
+    // -----------------------------------------------------------------
+    // IProcessor adapter
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// Python: <c>frame_enhancer/core.py</c>'s <c>process_frame</c> inputs. Widened beyond
+    /// Python's <c>TypedDict</c> with the settings the module would have read off
+    /// <c>state_manager</c> — see <see cref="IProcessorInputs"/>'s remarks.
+    /// </summary>
+    public sealed record FrameEnhancerInputs(
+        Mat TempVisionFrame,
+        Mat TempVisionMask,
+        ModelOptions ModelOptions,
+        InferenceSession FrameEnhancerSession,
+        double FrameEnhancerBlend) : IProcessorInputs;
+
+    /// <summary>
+    /// Python: <c>facefusion/processors/modules/frame_enhancer/core.py</c>'s module-level
+    /// functions, adapted to the <see cref="IProcessor"/> contract — see
+    /// <c>FrameColorizer.Processor</c> for the same pattern (both are frame-only processors
+    /// with no face pipeline).
+    /// </summary>
+    public sealed class Processor : IProcessor
+    {
+        /// <inheritdoc />
+        public string Name => "frame_enhancer";
+
+        /// <summary>Python: <c>get_common_modules()</c> (<c>[content_analyser]</c>).</summary>
+        public IReadOnlyList<string> GetCommonModules() => new[] { "content_analyser" };
+
+        /// <summary>Python: the <c>frame_enhancer</c>-specific half of <c>pre_check</c>. Takes
+        /// the chosen model because the parameterless <see cref="IProcessor.PreCheck"/> member
+        /// has no <c>state_manager</c> to read it from.</summary>
+        public bool PreCheck(FrameEnhancerModel model) => FrameEnhancer.PreCheck(model);
+
+        /// <inheritdoc />
+        bool IProcessor.PreCheck() => throw new InvalidOperationException(
+            "frame_enhancer.PreCheck requires a FrameEnhancerModel (no state_manager to read it from — call the FrameEnhancerModel overload instead).");
+
+        /// <summary>
+        /// Python: <c>pre_process(mode)</c>. Filesystem validation is out of scope (the same gap
+        /// <c>FrameColorizer.Processor.PreProcess</c> documents); <c>frame_enhancer</c> has no
+        /// source-path requirement of its own, so nothing else remains to check.
+        /// </summary>
+        public bool PreProcess(ProcessMode mode, ProcessorRunPaths paths)
+        {
+            _ = mode;
+            _ = paths;
+            return true;
+        }
+
+        /// <inheritdoc />
+        public ProcessorOutputs ProcessFrame(IProcessorInputs inputs)
+        {
+            if (inputs is not FrameEnhancerInputs frameEnhancerInputs)
+            {
+                throw new ArgumentException($"expected {nameof(FrameEnhancerInputs)}, got {inputs.GetType().Name}.", nameof(inputs));
+            }
+
+            var (visionFrame, mask) = FrameEnhancer.ProcessFrame(
+                frameEnhancerInputs.TempVisionFrame,
+                frameEnhancerInputs.TempVisionMask,
+                frameEnhancerInputs.ModelOptions,
+                frameEnhancerInputs.FrameEnhancerSession,
+                frameEnhancerInputs.FrameEnhancerBlend);
+
+            return new ProcessorOutputs(visionFrame, mask);
+        }
+
+        /// <summary>Python: <c>post_process()</c>. Cache clearing is out of scope without a real
+        /// pool owner to clear (rule 5), same as every other processor here.</summary>
+        public void PostProcess()
+        {
+        }
+    }
 }

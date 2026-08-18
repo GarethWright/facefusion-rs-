@@ -12,7 +12,7 @@ Tracks what is actually built against `docs/DOTNET_PORT_PLAN.md`. Updated as pha
 | 3 Inference layer | complete (CPU verified; GPU providers unverified — no GPU here) |
 | 4 Face pipeline | complete, verified against real ONNX inference |
 | 5 Processors | complete — 11/11 plus the audio layer |
-| 6 Workflows, jobs, CLI | workflows, jobs and CLI complete; `headless-run` produces real video verified against Python. 3 of 11 processors wired and verified (`frame_colorizer`, `background_remover`, `face_debugger`) |
+| 6 Workflows, jobs, CLI | **complete.** All 11 processors wired; 10 verified pixel-for-pixel against the Python CLI, the 11th (`deep_swapper`) blocked by a proxy-inaccessible model host |
 | 7 UI (Blazor) | **not started** |
 | 8 Streaming / webcam | **not started** |
 | 9 Performance tuning | **not started** (deliberately sequenced after parity) |
@@ -219,6 +219,60 @@ the comparison fair.
 
 Job files written by the C# CLI are validated and read back by the real Python
 `job_manager`, and vice versa.
+
+## All eleven processors are wired and compared against Python
+
+Each was verified by running both CLIs with identical arguments on the same 8 frames of
+`target-240p.mp4` (`--trim-frame-end 8 --execution-thread-count 1`) and diffing the decoded
+pixels:
+
+| processor | PSNR | max diff | pixels >30 |
+| --- | --- | --- | --- |
+| `frame_colorizer` | 43.7 dB | 16 | 0.000% |
+| `background_remover` | verified | — | — |
+| `face_debugger` | verified | — | — |
+| `face_swapper` | 43.3 dB | — | 0.000% |
+| `age_modifier` | 43.3 dB | 20 | 0.000% |
+| `expression_restorer` | 43.36 dB | 21 | 0.000% |
+| `face_editor` (smile 1.0, yaw 0.5) | 42.64 dB | 30 | 0.000% |
+| `lip_syncer` (`source.mp3`) | 43.30 dB | 23 | 0.000% |
+| `face_enhancer` | 43.02 dB | 25 | 0.000% |
+| `frame_enhancer` | 42.82 dB | 20 | 0.000% |
+| `deep_swapper` | **cannot be run here** — see below | | |
+
+Two composed runs check that the chain works, not just each processor alone:
+
+| run | PSNR | max diff | pixels >30 |
+| --- | --- | --- | --- |
+| video, `face_swapper face_enhancer frame_enhancer` | 42.20 dB | 86 | 0.001% |
+| image, `face_swapper face_enhancer` (`image_to_image` path) | 47.13 dB | 21 | 0.000% |
+
+The 42–43 dB band is what two independent libx264 encodes of *identical* pixels produce, so
+these are encoder noise, not divergence — the image run, which skips video encoding entirely,
+lands 4 dB higher for exactly that reason. The three-processor chain's single max-86 pixel is
+0.001% of the frame (roughly one pixel in 100,000), a face-boundary pixel amplified through
+three successive stages.
+
+`deep_swapper` is wired but **unverified**, and deliberately not claimed otherwise: its
+`.dfm` models are hosted on `huggingface.co`, which this environment's proxy refuses with 403.
+Neither implementation can run it here, so there is nothing to compare. What was checked is
+that both refuse rather than emit wrong output — Python fails hash validation after attempting
+a download, this port fails its file-presence pre-check (`download.py` is deliberately not
+ported).
+
+Two defects surfaced only because the binary was run:
+
+- **`face_swapper` had never executed end to end.** `PixelBoost.ExplodePixelBoost`
+  hard-asserted `CV_8UC3` while `NormalizeCropFrame`'s own remarks are explicit that it
+  deliberately returns float Mats. Its parity tests were green throughout, because they call
+  `ForwardSwapFace` directly and never the assembled pipeline.
+- **No processor reading source audio could run.** `HeadlessRunner.BuildRunContext` supplied
+  an `ExtractVoice` delegate that threw unconditionally, so `lip_syncer` failed the moment it
+  asked for a voice frame. It now opens the `voice_extractor` session lazily (`Lazy<T>`,
+  thread-safe by default — `ToVideo` calls it from several worker threads), so a run that
+  never touches audio does not pay for loading the model. Fixing it also put the whole audio
+  chain under test for the first time: ffmpeg decode, voice extraction, spectrogram, mel-frame
+  extraction — all of which the 43.30 dB `lip_syncer` figure now covers.
 
 ## Wiring a processor requires running it, not compiling it
 

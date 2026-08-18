@@ -23,39 +23,28 @@ namespace FaceFusion.Cli;
 /// </list>
 ///
 /// <para>
-/// <b>Coverage (Phase 6).</b> Wired and verified against the real Python CLI:
-/// <c>frame_colorizer</c>, <c>background_remover</c> (a real Cv2.Min type-mismatch bug fixed in
-/// <c>BackgroundRemover.cs</c> — see its class remarks) and <c>face_debugger</c>, which validates
-/// the shared face pipeline (<see cref="FacePipelineFactory"/>) end to end since it has no
-/// output model of its own to also get right.
+/// <b>Coverage.</b> All eleven processors are wired. Ten are verified the way this phase
+/// demands — both CLIs run on the same 8-frame clip and the output pixels compared, every one
+/// landing in the 42–43 dB band that two independent libx264 encodes of identical pixels
+/// produce (see docs/IMPLEMENTATION_STATUS.md for the per-processor table).
 /// </para>
 ///
 /// <para>
-/// <b>face_swapper attempted and dropped — a real, pre-existing bug, out of this assignment's
-/// file scope to fix.</b> <c>FaceSwapper.SwapFace</c> calls <c>PixelBoost.ExplodePixelBoost</c>
-/// on the float (<c>CV_32FC3</c>/<c>CV_64FC3</c>) Mats <c>NormalizeCropFrame</c> produces —
-/// <c>NormalizeCropFrame</c>'s own remarks are explicit that this is deliberate ("never cast
-/// back to <c>uint8</c> first") — but <c>PixelBoost.ExplodePixelBoost</c> hard-asserts every
-/// input Mat is <c>CV_8UC3</c> and throws <see cref="ArgumentException"/> otherwise. This fires
-/// on every real frame for every <see cref="FaceSwapperModelKind"/> (confirmed with
-/// <c>inswapper_128</c>, whose <c>NormalizeCropFrame</c> branch returns <c>CV_32FC3</c>) — the
-/// full <c>face_swapper</c> pipeline (<c>ProcessFrame</c> → <c>SwapFace</c> → ExplodePixelBoost)
-/// has evidently never been exercised end to end before (the existing parity tests call
-/// <c>ForwardSwapFace</c> directly, never the full pipeline). The fix belongs in
-/// <c>PixelBoost.cs</c> or <c>FaceSwapper.cs</c>, neither of which this assignment's file scope
-/// covers (Task 2 needed no new adapter for <c>face_swapper</c> — one already existed — and
-/// Task 3 names only <c>BackgroundRemover.cs</c>), so per the assignment's own "never return a
-/// silently-wrong step" instruction <c>face_swapper</c> is reported here rather than wired
-/// broken. See the assignment report for the exact repro and stack trace.
+/// <b>The one exception is <c>deep_swapper</c>,</b> whose <c>.dfm</c> models live on
+/// huggingface.co — blocked by this environment's proxy with a 403, so neither implementation
+/// can run it here to be compared. Both refuse the run rather than emitting wrong output
+/// (Python fails its hash validation after attempting a download; this port fails its
+/// file-presence pre-check, since <c>download.py</c> is deliberately not ported), which is
+/// what has actually been checked.
 /// </para>
 ///
 /// <para>
-/// Every other name in the Phase-6 brief's ordered list (<c>face_enhancer</c>,
-/// <c>frame_enhancer</c> — no <see cref="IProcessor"/> adapter exists yet, and adding one plus
-/// wiring it is a materially larger job than the remaining budget covers; <c>age_modifier</c>,
-/// <c>expression_restorer</c>, <c>lip_syncer</c>, <c>deep_swapper</c>, <c>face_editor</c> — an
-/// adapter exists, not yet wired here) throws <see cref="NotSupportedException"/> naming the
-/// processor, per the same instruction.
+/// Two defects were found by running the binary rather than by the test suite, and both are
+/// fixed: <c>PixelBoost.ExplodePixelBoost</c> hard-asserted <c>CV_8UC3</c> while
+/// <c>NormalizeCropFrame</c> deliberately hands it float Mats (so <c>face_swapper</c>'s
+/// assembled pipeline had never once executed), and <c>HeadlessRunner.BuildRunContext</c>
+/// supplied an <c>ExtractVoice</c> delegate that threw unconditionally, which made
+/// <c>lip_syncer</c> — any processor reading source audio — impossible to run.
 /// </para>
 /// </summary>
 public static class ProcessorStepFactory
@@ -77,6 +66,8 @@ public static class ProcessorStepFactory
 			"face_editor" => FaceEditor.PreCheck() && FacePipelineFactory.PreCheck(args),
 			"deep_swapper" => DeepSwapper.PreCheck(ReadDeepSwapperModel(args)) && FacePipelineFactory.PreCheck(args),
 			"lip_syncer" => LipSyncer.PreCheck(ReadLipSyncerModel(args)) && FacePipelineFactory.PreCheck(args),
+			"frame_enhancer" => FrameEnhancer.PreCheck(ReadFrameEnhancerModel(args)),
+			"face_enhancer" => FaceEnhancer.PreCheck(ReadFaceEnhancerModel(args)) && FacePipelineFactory.PreCheck(args),
 			_ => throw Unsupported(processorName),
 		};
 	}
@@ -105,6 +96,8 @@ public static class ProcessorStepFactory
 			"face_editor" => BuildFaceEditor(args, faceResources ?? throw MissingFaceResources(processorName)),
 			"deep_swapper" => BuildDeepSwapper(args, faceResources ?? throw MissingFaceResources(processorName)),
 			"lip_syncer" => BuildLipSyncer(args, faceResources ?? throw MissingFaceResources(processorName)),
+			"frame_enhancer" => BuildFrameEnhancer(args),
+			"face_enhancer" => BuildFaceEnhancer(args, faceResources ?? throw MissingFaceResources(processorName)),
 			_ => throw Unsupported(processorName),
 		};
 	}
@@ -736,6 +729,94 @@ public static class ProcessorStepFactory
 			lipSyncerSession,
 			maskerSessions.OccluderPool,
 			occluderModel,
+			selector.Mode,
+			selector.TrackerScore,
+			selector.Order,
+			selector.Gender,
+			selector.Race,
+			selector.AgeStart,
+			selector.AgeEnd,
+			selector.ReferenceFacePosition,
+			selector.ReferenceFaceDistance,
+			faceResources.GetStaticFaces,
+			faceResources.RefillFaces));
+
+		return new BuiltStep(step, new CompositeDisposable(sessions));
+	}
+
+
+	// -----------------------------------------------------------------
+	// frame_enhancer
+	// -----------------------------------------------------------------
+
+	// Defaults from frame_enhancer/core.py's register_args: model 'span_kendata_x4', blend 80.
+	private static FrameEnhancerModel ReadFrameEnhancerModel(IReadOnlyDictionary<string, object?> args)
+		=> EnumNames.FromWireName<FrameEnhancerModel>(StepArgsReader.GetString(args, "frame_enhancer_model", "span_kendata_x4"));
+
+	private static BuiltStep BuildFrameEnhancer(IReadOnlyDictionary<string, object?> args)
+	{
+		var model = ReadFrameEnhancerModel(args);
+		var options = FrameEnhancer.GetModelOptions(model);
+		var blend = StepArgsReader.GetInt(args, "frame_enhancer_blend", 80);
+
+		var session = new InferenceSession(options.Source.Path);
+		var processor = new FrameEnhancer.Processor();
+
+		var step = new WorkflowProcessorStep(processor, context => new FrameEnhancer.FrameEnhancerInputs(
+			context.TempVisionFrame,
+			context.TempVisionMask,
+			options,
+			session,
+			blend));
+
+		return new BuiltStep(step, session);
+	}
+
+	// -----------------------------------------------------------------
+	// face_enhancer
+	// -----------------------------------------------------------------
+
+	// Defaults from face_enhancer/core.py's register_args: model 'gfpgan_1.4', blend 80,
+	// weight 0.5.
+	private static FaceEnhancerModel ReadFaceEnhancerModel(IReadOnlyDictionary<string, object?> args)
+		=> EnumNames.FromWireName<FaceEnhancerModel>(StepArgsReader.GetString(args, "face_enhancer_model", "gfpgan_1.4"));
+
+	private static BuiltStep BuildFaceEnhancer(IReadOnlyDictionary<string, object?> args, FacePipelineFactory.Resources faceResources)
+	{
+		var model = ReadFaceEnhancerModel(args);
+		var options = FaceEnhancer.GetModelOptions(model);
+		var blend = StepArgsReader.GetInt(args, "face_enhancer_blend", 80);
+		var weight = StepArgsReader.GetDouble(args, "face_enhancer_weight", 0.5);
+		var selector = ReadFaceSelectorSettings(args);
+		var masks = ReadFaceMaskSettings(args);
+		var occluderModel = ReadFaceOccluderModel(args);
+		var maskerSessions = BuildMaskerSessions(masks.Types, occluderModel, ReadFaceParserModel(args));
+
+		var faceEnhancerSession = new InferenceSession(options.Source.Path);
+		var sessions = new List<InferenceSession> { faceEnhancerSession };
+		sessions.AddRange(maskerSessions.Sessions);
+
+		// FaceEnhancer.ProcessFrame takes a non-nullable pool (it only reaches into it when
+		// face_mask_types includes 'occlusion'); an empty dictionary is the "not requested"
+		// case, matching BuildMaskerSessions returning null for it.
+		var occluderPool = maskerSessions.OccluderPool ?? new Dictionary<string, InferenceSession>();
+
+		var processor = new FaceEnhancer.Processor();
+
+		var step = new WorkflowProcessorStep(processor, context => new FaceEnhancer.FaceEnhancerInputs(
+			context.ReferenceVisionFrame,
+			context.SourceVisionFrames,
+			context.TargetVisionFrames,
+			context.TempVisionFrame,
+			context.TempVisionMask,
+			options,
+			faceEnhancerSession,
+			weight,
+			blend,
+			masks.Types,
+			masks.Blur,
+			occluderModel,
+			occluderPool,
 			selector.Mode,
 			selector.TrackerScore,
 			selector.Order,
