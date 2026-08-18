@@ -33,6 +33,7 @@
     <ProjectReference Include="..\..\src\FaceFusion.Processors\FaceFusion.Processors.csproj" />
     <ProjectReference Include="..\..\src\FaceFusion.Jobs\FaceFusion.Jobs.csproj" />
     <ProjectReference Include="..\..\src\FaceFusion.Workflows\FaceFusion.Workflows.csproj" />
+    <ProjectReference Include="..\..\src\FaceFusion.Cli\FaceFusion.Cli.csproj" />
   </ItemGroup>
 
 </Project>
