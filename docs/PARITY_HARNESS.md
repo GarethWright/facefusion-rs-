@@ -99,6 +99,20 @@ Record a per-stage tolerance in the test rather than reaching for a global defau
 - **Final frames** compare with PSNR/SSIM rather than element equality, since encoders
   differ. Assert a threshold, not equality.
 
+## Fixture size
+
+Model-input tensors are multi-megabyte float32 arrays and the corpus grows with every
+ported stage, so large fixtures are committed gzipped. `NpyReader.Load("foo.npy")`
+transparently falls back to `foo.npy.gz`, which means **compressing a fixture never
+requires touching the test that reads it**. Compression is about 4x (the corpus went from
+34 MB to 15 MB).
+
+When adding fixtures, gzip anything over ~500 KB:
+
+```
+find tests/FaceFusion.ParityTests/fixtures -name "*.npy" -size +500k -exec gzip -9 {} \;
+```
+
 ## Regenerating fixtures
 
 ```

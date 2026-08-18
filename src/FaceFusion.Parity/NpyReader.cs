@@ -19,8 +19,29 @@ public static class NpyReader
 	/// <summary>Loads a <c>.npy</c> array from a file path.</summary>
 	public static NpyArray Load(string path)
 	{
-		using var stream = File.OpenRead(path);
-		return Load(stream);
+		// Committed fixtures may be gzipped: model-input tensors are multi-megabyte
+		// float32 arrays that compress about 4x, which matters because the fixture corpus
+		// grows with every ported stage. A caller still asks for "foo.npy"; if only
+		// "foo.npy.gz" is on disk it is transparently decompressed, so compressing a
+		// fixture never means touching the test that reads it.
+		if (!File.Exists(path) && File.Exists(path + ".gz"))
+		{
+			path += ".gz";
+		}
+
+		using var fileStream = File.OpenRead(path);
+
+		if (path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+		{
+			using var gzipStream = new System.IO.Compression.GZipStream(fileStream, System.IO.Compression.CompressionMode.Decompress);
+			// GZipStream is forward-only and the reader seeks, so materialise first.
+			using var buffer = new MemoryStream();
+			gzipStream.CopyTo(buffer);
+			buffer.Position = 0;
+			return Load(buffer);
+		}
+
+		return Load(fileStream);
 	}
 
 	/// <summary>Loads a <c>.npy</c> array from a stream. The stream is read from its current position.</summary>
