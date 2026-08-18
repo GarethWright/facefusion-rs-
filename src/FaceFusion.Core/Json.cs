@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace FaceFusion.Core;
@@ -15,6 +16,18 @@ public static class Json
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
+        // System.Text.Json's default encoder escapes '+', '<', '>' and '&' for HTML
+        // safety, so a job timestamp came out as "...\u002B00:00" where Python writes
+        // "...+00:00". Every job file carries a timestamp, so the default encoder made
+        // every job file differ from Python's. "Unsafe" here means unsafe to drop into
+        // HTML unescaped; job JSON is never embedded in a page.
+        //
+        // Residual, deliberate difference: Python's json.dump defaults to
+        // ensure_ascii=True and escapes non-ASCII as lowercase \u00e9, while this writes
+        // the character raw as UTF-8. Both decode to the same string, so files still
+        // round-trip between the implementations; only a byte comparison of a path
+        // containing non-ASCII would differ.
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         // Deliberately NOT JsonIgnoreCondition.WhenWritingNull: Python's json.dump
         // emits null-valued keys, and job files rely on it — job_manager.create_job
         // writes "date_updated": null. Dropping the key changes the file's shape.

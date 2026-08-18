@@ -123,4 +123,39 @@ public sealed class JsonPythonParityTests
         Assert.Null(Json.ReadJson(null));
         Assert.Null(Json.ReadJson("does-not-exist.json"));
     }
+
+    /// <summary>
+    /// Regression for a defect found by running the CLI: the default encoder escaped '+'
+    /// as \u002B, so every job file's ISO timestamp differed from Python's. Python writes
+    /// "+00:00" literally, and leaves '&lt;', '&gt;' and '&amp;' unescaped too.
+    /// </summary>
+    [Fact]
+    public void WriteJson_DoesNotEscapePlusOrHtmlCharacters()
+    {
+        var content = new Dictionary<string, object?>
+        {
+            ["date_created"] = "2026-08-18T14:12:35.356639+00:00",
+            ["html"] = "a<b>&c"
+        };
+
+        var tempPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".json");
+
+        try
+        {
+            Assert.True(Json.WriteJson(tempPath, content));
+
+            var written = File.ReadAllText(tempPath);
+
+            Assert.Contains("2026-08-18T14:12:35.356639+00:00", written, StringComparison.Ordinal);
+            Assert.Contains("a<b>&c", written, StringComparison.Ordinal);
+            Assert.DoesNotContain("\\u002B", written, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
 }
