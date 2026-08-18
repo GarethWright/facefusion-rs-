@@ -25,10 +25,11 @@ namespace FaceFusion.Core;
 ///
 /// <c>sync_state</c>/<c>sync_item</c> (copying the 'ui' dict over the 'cli' one) has no
 /// equivalent here: it existed solely to reconcile the two contexts, which no longer exist.
-/// <c>clear_item</c> (Python: <c>set_item(key, None)</c>) has no direct equivalent either,
-/// because every <see cref="State"/> field is non-nullable — see the "known gaps" note in
-/// <see cref="SettingsBuilder"/> for fields where Python's None is meaningful and the current
-/// <see cref="State"/> shape cannot represent it.
+/// <c>clear_item</c> (Python: <c>set_item(key, None)</c>) is representable directly for the
+/// fields <see cref="State"/> declares nullable (see the nullability note on that record) —
+/// callers can pass <c>null</c> to <see cref="WithItem"/> for those keys. It has no equivalent
+/// for the remaining, non-nullable fields, matching Python's own consumers, none of which treat
+/// <c>None</c> as meaningful for those keys either.
 /// </summary>
 public static class Settings
 {
@@ -132,12 +133,12 @@ public static class Settings
 			StateKey.ConfigPath => state with { ConfigPath = (string)value! },
 			StateKey.TempPath => state with { TempPath = (string)value! },
 			StateKey.JobsPath => state with { JobsPath = (string)value! },
-			StateKey.SourcePaths => state with { SourcePaths = (System.Collections.Generic.IReadOnlyList<string>)value! },
-			StateKey.TargetPath => state with { TargetPath = (string)value! },
-			StateKey.OutputPath => state with { OutputPath = (string)value! },
-			StateKey.SourcePattern => state with { SourcePattern = (string)value! },
-			StateKey.TargetPattern => state with { TargetPattern = (string)value! },
-			StateKey.OutputPattern => state with { OutputPattern = (string)value! },
+			StateKey.SourcePaths => state with { SourcePaths = (System.Collections.Generic.IReadOnlyList<string>?)value },
+			StateKey.TargetPath => state with { TargetPath = (string?)value },
+			StateKey.OutputPath => state with { OutputPath = (string?)value },
+			StateKey.SourcePattern => state with { SourcePattern = (string?)value },
+			StateKey.TargetPattern => state with { TargetPattern = (string?)value },
+			StateKey.OutputPattern => state with { OutputPattern = (string?)value },
 			StateKey.DownloadProviders => state with { DownloadProviders = (System.Collections.Generic.IReadOnlyList<DownloadProvider>)value! },
 			StateKey.DownloadScope => state with { DownloadScope = (DownloadScope)value! },
 			StateKey.BenchmarkMode => state with { BenchmarkMode = (BenchmarkMode)value! },
@@ -152,10 +153,10 @@ public static class Settings
 			StateKey.FaceLandmarkerScore => state with { FaceLandmarkerScore = (double)value! },
 			StateKey.FaceSelectorMode => state with { FaceSelectorMode = (FaceSelectorMode)value! },
 			StateKey.FaceSelectorOrder => state with { FaceSelectorOrder = (FaceSelectorOrder)value! },
-			StateKey.FaceSelectorGender => state with { FaceSelectorGender = (FaceSelectorGender)value! },
-			StateKey.FaceSelectorRace => state with { FaceSelectorRace = (FaceSelectorRace)value! },
-			StateKey.FaceSelectorAgeStart => state with { FaceSelectorAgeStart = (int)value! },
-			StateKey.FaceSelectorAgeEnd => state with { FaceSelectorAgeEnd = (int)value! },
+			StateKey.FaceSelectorGender => state with { FaceSelectorGender = (FaceSelectorGender?)value },
+			StateKey.FaceSelectorRace => state with { FaceSelectorRace = (FaceSelectorRace?)value },
+			StateKey.FaceSelectorAgeStart => state with { FaceSelectorAgeStart = (int?)value },
+			StateKey.FaceSelectorAgeEnd => state with { FaceSelectorAgeEnd = (int?)value },
 			StateKey.ReferenceFacePosition => state with { ReferenceFacePosition = (int)value! },
 			StateKey.ReferenceFaceDistance => state with { ReferenceFaceDistance = (double)value! },
 			StateKey.ReferenceFrameNumber => state with { ReferenceFrameNumber = (int)value! },
@@ -168,8 +169,8 @@ public static class Settings
 			StateKey.FaceMaskBlur => state with { FaceMaskBlur = (double)value! },
 			StateKey.FaceMaskPadding => state with { FaceMaskPadding = (Padding)value! },
 			StateKey.VoiceExtractorModel => state with { VoiceExtractorModel = (VoiceExtractorModel)value! },
-			StateKey.TrimFrameStart => state with { TrimFrameStart = (int)value! },
-			StateKey.TrimFrameEnd => state with { TrimFrameEnd = (int)value! },
+			StateKey.TrimFrameStart => state with { TrimFrameStart = (int?)value },
+			StateKey.TrimFrameEnd => state with { TrimFrameEnd = (int?)value },
 			StateKey.TempFrameFormat => state with { TempFrameFormat = (TempFrameFormat)value! },
 			StateKey.TempPixelFormat => state with { TempPixelFormat = (TempPixelFormat)value! },
 			StateKey.TargetFrameAmount => state with { TargetFrameAmount = (int)value! },
@@ -182,7 +183,7 @@ public static class Settings
 			StateKey.OutputVideoPreset => state with { OutputVideoPreset = (VideoPreset)value! },
 			StateKey.OutputVideoQuality => state with { OutputVideoQuality = (int)value! },
 			StateKey.OutputVideoScale => state with { OutputVideoScale = (double)value! },
-			StateKey.OutputVideoFps => state with { OutputVideoFps = (double)value! },
+			StateKey.OutputVideoFps => state with { OutputVideoFps = (double?)value },
 			StateKey.WorkflowMode => state with { WorkflowMode = (WorkflowMode)value! },
 			StateKey.WorkflowStrategy => state with { WorkflowStrategy = (WorkflowStrategy)value! },
 			StateKey.Processors => state with { Processors = (System.Collections.Generic.IReadOnlyList<string>)value! },

@@ -116,6 +116,16 @@ rule 2).
    `"date_updated": null`, which `job_manager.create_job` writes. Job files must
    round-trip between the two implementations (plan §9.3), so output is now byte-exact
    against `json.dump(..., indent = 4)`.
+6. **Non-nullable `State` fields conflated "unset" with zero — and silently turned an
+   unset face-selector gender into `auto`.** 13 fields whose `program.py` default is
+   `config.get_*_value(section, option)` with no fallback (therefore `None`) were declared
+   non-nullable, so the builder filled them with zero values. The worst case was
+   `FaceSelectorGender`/`FaceSelectorRace`: the placeholder resolved "unset" to the first
+   enum member, which is `Auto` — but `auto` is a *real, distinct* value in
+   `face_selector.py:88` that triggers gender inference from the source face. Unset and
+   `auto` are different behaviours, and the port had merged them. The 13 fields are now
+   nullable, with `trim_frame_start`/`trim_frame_end` (`Optional[int]` at
+   `vision.py:149`) and `output_video_fps` among them.
 
 ## Known gaps
 

@@ -17,25 +17,24 @@ namespace FaceFusion.Core;
 /// not exist yet in this phase.
 ///
 /// <see cref="Build"/> therefore produces the "ini value, falling back to program.py's
-/// hardcoded literal" layer only, as a plain <see cref="FaceFusion.Types.State"/>. Two kinds
-/// of field do not get a faithful default here and are called out below and at each site with
+/// hardcoded literal" layer only, as a plain <see cref="FaceFusion.Types.State"/>. One kind
+/// of field does not get a faithful default here and is called out below and at each site with
 /// a "PLACEHOLDER" comment:
 ///
-/// 1. **Environment-probed defaults** (output_audio_encoder, output_video_encoder,
-///    execution_providers) — Python computes these from `get_available_encoder_set()` /
-///    `get_available_execution_providers()` at parse time. This builder uses a fixed,
-///    deterministic stand-in (the first declared enum member) instead, and a later phase
-///    that owns those subsystems should overwrite the field with `state with { ... }` once it
-///    has a real answer — that `with` expression is the "seam".
-/// 2. **Fields with no Python default at all** (None): e.g. `target_path`,
-///    `face_selector_age_start`, `output_video_fps`, and the three CLI-positional-only fields
-///    `job_id` / `job_status` / `step_index`. Python represents "unset" as `None`; every field
-///    in the current <see cref="State"/> record is non-nullable, so there is no exact
-///    equivalent to fall back to here. This builder uses each type's natural zero value
-///    (`""`, `0`, `0.0`, empty list, first enum member) and documents it inline. This is a
-///    pre-existing shape gap in <see cref="State"/> (built by an earlier agent, out of this
-///    assignment's scope to change) rather than a decision made by this file — see the report
-///    for the recommendation to widen the affected fields to nullable in a follow-up.
+/// **Environment-probed defaults** (output_audio_encoder, output_video_encoder,
+/// execution_providers) — Python computes these from `get_available_encoder_set()` /
+/// `get_available_execution_providers()` at parse time. This builder uses a fixed,
+/// deterministic stand-in (the first declared enum member) instead, and a later phase
+/// that owns those subsystems should overwrite the field with `state with { ... }` once it
+/// has a real answer — that `with` expression is the "seam".
+///
+/// Fields whose Python default is `None` (e.g. `target_path`, `face_selector_age_start`,
+/// `output_video_fps`, `trim_frame_start`) are nullable on <see cref="State"/> (see the
+/// nullability note on that record) and this builder passes through `null` for them when the
+/// ini key is absent, rather than substituting a zero value. The three CLI-positional-only
+/// fields `job_id` / `job_status` / `step_index`, and the subcommand field `command`, are a
+/// separate, Phase-6 concern — this builder has no ini/CLI input for them yet and uses each
+/// type's natural zero value as a placeholder, documented inline at each site.
 ///
 /// CLI args are Phase 6: apply them, once parsed, as `with`-expressions layered on top of the
 /// <see cref="State"/> this method returns — mirroring how Python's `args.py::apply_args`
@@ -59,12 +58,12 @@ public static class SettingsBuilder
 			ConfigPath: "facefusion.ini", // Python default in create_config_path_program; not itself ini-driven.
 			TempPath: config.GetStrValue("paths", "temp_path", Path.GetTempPath())!,
 			JobsPath: config.GetStrValue("paths", "jobs_path", ".jobs")!,
-			SourcePaths: config.GetStrList("paths", "source_paths") ?? System.Array.Empty<string>(), // Python default: None.
-			TargetPath: config.GetStrValue("paths", "target_path") ?? string.Empty, // Python default: None.
-			OutputPath: config.GetStrValue("paths", "output_path") ?? string.Empty, // Python default: None.
-			SourcePattern: config.GetStrValue("patterns", "source_pattern") ?? string.Empty, // Python default: None.
-			TargetPattern: config.GetStrValue("patterns", "target_pattern") ?? string.Empty, // Python default: None.
-			OutputPattern: config.GetStrValue("patterns", "output_pattern") ?? string.Empty, // Python default: None.
+			SourcePaths: config.GetStrList("paths", "source_paths"), // Python default: None; State.SourcePaths is nullable.
+			TargetPath: config.GetStrValue("paths", "target_path"), // Python default: None; State.TargetPath is nullable.
+			OutputPath: config.GetStrValue("paths", "output_path"), // Python default: None; State.OutputPath is nullable.
+			SourcePattern: config.GetStrValue("patterns", "source_pattern"), // Python default: None; State.SourcePattern is nullable.
+			TargetPattern: config.GetStrValue("patterns", "target_pattern"), // Python default: None; State.TargetPattern is nullable.
+			OutputPattern: config.GetStrValue("patterns", "output_pattern"), // Python default: None; State.OutputPattern is nullable.
 			DownloadProviders: ParseEnumList<DownloadProvider>(
 				config.GetStrList("download", "download_providers", string.Join(' ', EnumNames.AllWireNames<DownloadProvider>()))!),
 			DownloadScope: ParseEnum<DownloadScope>(config.GetStrValue("download", "download_scope", "lite")!),
@@ -81,10 +80,10 @@ public static class SettingsBuilder
 			FaceLandmarkerScore: config.GetFloatValue("face_landmarker", "face_landmarker_score", "0.5")!.Value,
 			FaceSelectorMode: ParseEnum<FaceSelectorMode>(config.GetStrValue("face_selector", "face_selector_mode", "reference")!),
 			FaceSelectorOrder: ParseEnum<FaceSelectorOrder>(config.GetStrValue("face_selector", "face_selector_order", "large-small")!),
-			FaceSelectorRace: ParseEnumOrFirst<FaceSelectorRace>(config.GetStrValue("face_selector", "face_selector_race")), // Python default: None.
-			FaceSelectorGender: ParseEnumOrFirst<FaceSelectorGender>(config.GetStrValue("face_selector", "face_selector_gender")), // Python default: None.
-			FaceSelectorAgeStart: config.GetIntValue("face_selector", "face_selector_age_start") ?? 0, // Python default: None.
-			FaceSelectorAgeEnd: config.GetIntValue("face_selector", "face_selector_age_end") ?? 0, // Python default: None.
+			FaceSelectorRace: ParseEnumOrNull<FaceSelectorRace>(config.GetStrValue("face_selector", "face_selector_race")), // Python default: None; State.FaceSelectorRace is nullable.
+			FaceSelectorGender: ParseEnumOrNull<FaceSelectorGender>(config.GetStrValue("face_selector", "face_selector_gender")), // Python default: None; State.FaceSelectorGender is nullable.
+			FaceSelectorAgeStart: config.GetIntValue("face_selector", "face_selector_age_start"), // Python default: None; State.FaceSelectorAgeStart is nullable.
+			FaceSelectorAgeEnd: config.GetIntValue("face_selector", "face_selector_age_end"), // Python default: None; State.FaceSelectorAgeEnd is nullable.
 			ReferenceFacePosition: config.GetIntValue("face_selector", "reference_face_position", "0")!.Value,
 			ReferenceFaceDistance: config.GetFloatValue("face_selector", "reference_face_distance", "0.3")!.Value,
 			ReferenceFrameNumber: config.GetIntValue("face_selector", "reference_frame_number", "0")!.Value,
@@ -99,8 +98,8 @@ public static class SettingsBuilder
 			FaceMaskBlur: config.GetFloatValue("face_masker", "face_mask_blur", "0.3")!.Value,
 			FaceMaskPadding: ToPadding(config.GetIntList("face_masker", "face_mask_padding", "0 0 0 0")!),
 			VoiceExtractorModel: ParseEnum<VoiceExtractorModel>(config.GetStrValue("voice_extractor", "voice_extractor_model", "kim_vocal_2")!),
-			TrimFrameStart: config.GetIntValue("frame_extraction", "trim_frame_start") ?? 0, // Python default: None.
-			TrimFrameEnd: config.GetIntValue("frame_extraction", "trim_frame_end") ?? 0, // Python default: None.
+			TrimFrameStart: config.GetIntValue("frame_extraction", "trim_frame_start"), // Python default: None; State.TrimFrameStart is nullable.
+			TrimFrameEnd: config.GetIntValue("frame_extraction", "trim_frame_end"), // Python default: None; State.TrimFrameEnd is nullable.
 			TempFrameFormat: ParseEnum<TempFrameFormat>(config.GetStrValue("frame_extraction", "temp_frame_format", "png")!),
 			TempPixelFormat: ParseEnum<TempPixelFormat>(config.GetStrValue("frame_extraction", "temp_pixel_format", "bgr24")!),
 			TargetFrameAmount: config.GetIntValue("frame_distribution", "target_frame_amount", "2")!.Value,
@@ -118,7 +117,7 @@ public static class SettingsBuilder
 			OutputVideoPreset: ParseEnum<VideoPreset>(config.GetStrValue("output_creation", "output_video_preset", "veryfast")!),
 			OutputVideoQuality: config.GetIntValue("output_creation", "output_video_quality", "80")!.Value,
 			OutputVideoScale: config.GetFloatValue("output_creation", "output_video_scale", "1.0")!.Value,
-			OutputVideoFps: config.GetFloatValue("output_creation", "output_video_fps") ?? 0.0, // Python default: None (falls back to detect_video_fps at use-site).
+			OutputVideoFps: config.GetFloatValue("output_creation", "output_video_fps"), // Python default: None (falls back to detect_video_fps at use-site); State.OutputVideoFps is nullable.
 			WorkflowMode: ParseEnum<WorkflowMode>(config.GetStrValue("workflow", "workflow_mode", "auto")!),
 			WorkflowStrategy: ParseEnum<WorkflowStrategy>(config.GetStrValue("workflow", "workflow_strategy", "memory")!),
 			Processors: config.GetStrList("processors", "processors", "face_swapper")!,
@@ -156,8 +155,10 @@ public static class SettingsBuilder
 
 	/// <summary>
 	/// Parses a wire name if present, otherwise returns the first declared enum member. Used
-	/// for fields whose Python default is <c>None</c> but whose <see cref="State"/> field is a
-	/// non-nullable enum — see the "known gaps" note on <see cref="Build"/>.
+	/// only for the environment-probed fields (output_audio_encoder, output_video_encoder)
+	/// whose Python default is a real value computed from the runtime environment, not `None`
+	/// — see the "known gaps" note on <see cref="Build"/>. This is a deterministic stand-in for
+	/// that computed value, not a stand-in for `None`.
 	/// </summary>
 	private static T ParseEnumOrFirst<T>(string? wireName) where T : struct, System.Enum
 	{
@@ -166,6 +167,20 @@ public static class SettingsBuilder
 			return EnumNames.FromWireName<T>(wireName);
 		}
 		return default;
+	}
+
+	/// <summary>
+	/// Parses a wire name if present, otherwise returns <c>null</c>. Used for fields whose
+	/// Python default is genuinely <c>None</c> and whose <see cref="State"/> field is a
+	/// nullable enum (<see cref="FaceSelectorGender"/>, <see cref="FaceSelectorRace"/>).
+	/// </summary>
+	private static T? ParseEnumOrNull<T>(string? wireName) where T : struct, System.Enum
+	{
+		if (wireName != null)
+		{
+			return EnumNames.FromWireName<T>(wireName);
+		}
+		return null;
 	}
 
 	private static IReadOnlyList<T> ParseEnumList<T>(IReadOnlyList<string> wireNames) where T : struct, System.Enum
