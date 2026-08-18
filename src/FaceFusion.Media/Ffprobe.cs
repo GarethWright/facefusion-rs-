@@ -34,9 +34,9 @@ public static class Ffprobe
 	/// <c>None</c> would make <c>subprocess.Popen</c> raise; this port instead fails
 	/// gracefully so callers can treat "binary not found" the same as "no output").
 	/// </summary>
-	public static Process? RunFfprobe(IReadOnlyList<string> commands)
+	public static Process? RunFfprobe(IReadOnlyList<string> commands, string? ffprobePath = null)
 	{
-		var fullCommands = FfprobeBuilder.Run(commands);
+		var fullCommands = FfprobeBuilder.Run(commands, ffprobePath);
 		return ProcessRunner.TryStart(fullCommands, redirectStdin: false, redirectStderr: true);
 	}
 
@@ -72,7 +72,7 @@ public static class Ffprobe
 	}
 
 	/// <summary>Python: <c>probe_audio_entries</c>.</summary>
-	public static IReadOnlyDictionary<string, string> ProbeAudioEntries(string audioPath, IReadOnlyList<string> entries)
+	public static IReadOnlyDictionary<string, string> ProbeAudioEntries(string audioPath, IReadOnlyList<string> entries, string? ffprobePath = null)
 	{
 		var commands = FfprobeBuilder.Chain(
 			FfprobeBuilder.SelectStream("a:0"),
@@ -80,12 +80,12 @@ public static class Ffprobe
 			FfprobeBuilder.FormatToKeyValue(),
 			FfprobeBuilder.SetInput(audioPath));
 
-		var output = ProcessRunner.Communicate(RunFfprobe(commands)).Stdout;
+		var output = ProcessRunner.Communicate(RunFfprobe(commands, ffprobePath)).Stdout;
 		return ParseEntries(output);
 	}
 
 	/// <summary>Python: <c>probe_video_entries</c>.</summary>
-	public static IReadOnlyDictionary<string, string> ProbeVideoEntries(string videoPath, IReadOnlyList<string> entries)
+	public static IReadOnlyDictionary<string, string> ProbeVideoEntries(string videoPath, IReadOnlyList<string> entries, string? ffprobePath = null)
 	{
 		var commands = FfprobeBuilder.Chain(
 			FfprobeBuilder.SelectStream("v:0"),
@@ -93,31 +93,40 @@ public static class Ffprobe
 			FfprobeBuilder.FormatToKeyValue(),
 			FfprobeBuilder.SetInput(videoPath));
 
-		var output = ProcessRunner.Communicate(RunFfprobe(commands)).Stdout;
+		var output = ProcessRunner.Communicate(RunFfprobe(commands, ffprobePath)).Stdout;
 		return ParseEntries(output);
 	}
 
 	/// <summary>Python: <c>probe_format_entries</c>.</summary>
-	public static IReadOnlyDictionary<string, string> ProbeFormatEntries(string mediaPath, IReadOnlyList<string> entries)
+	public static IReadOnlyDictionary<string, string> ProbeFormatEntries(string mediaPath, IReadOnlyList<string> entries, string? ffprobePath = null)
 	{
 		var commands = FfprobeBuilder.Chain(
 			FfprobeBuilder.ShowFormatEntries(entries),
 			FfprobeBuilder.FormatToKeyValue(),
 			FfprobeBuilder.SetInput(mediaPath));
 
-		var output = ProcessRunner.Communicate(RunFfprobe(commands)).Stdout;
+		var output = ProcessRunner.Communicate(RunFfprobe(commands, ffprobePath)).Stdout;
 		return ParseEntries(output);
 	}
 
 	/// <summary>Python: <c>extract_static_audio_metadata</c> (memoized).</summary>
 	public static AudioMetadata ExtractStaticAudioMetadata(string audioPath)
-		=> StaticAudioMetadataCache.GetOrAdd(audioPath, ExtractAudioMetadata);
+		=> StaticAudioMetadataCache.GetOrAdd(audioPath, path => ExtractAudioMetadata(path));
 
-	/// <summary>Python: <c>extract_audio_metadata</c>.</summary>
-	public static AudioMetadata ExtractAudioMetadata(string audioPath)
+	/// <summary>
+	/// Python: <c>extract_audio_metadata</c>. <paramref name="ffprobePath"/> is the same
+	/// additive port-only override described on <see cref="FfprobeBuilder.Run"/> — it lets a
+	/// caller/test force the "ffprobe not found" path deterministically. When ffprobe truly
+	/// cannot be found, this throws (see class remarks / port report): Python's own
+	/// <c>float(format_entries.get('duration'))</c> already raises <c>TypeError</c> in that
+	/// case (the dict comes back empty, <c>.get</c> returns <c>None</c>), so the C# throw
+	/// (<see cref="KeyNotFoundException"/> from the dictionary indexer) is faithful parity,
+	/// not a bug — deliberately not "fixed" to degrade gracefully, per port convention rule 1.
+	/// </summary>
+	public static AudioMetadata ExtractAudioMetadata(string audioPath, string? ffprobePath = null)
 	{
-		var audioEntries = ProbeAudioEntries(audioPath, new[] { "sample_rate", "channels" });
-		var formatEntries = ProbeFormatEntries(audioPath, new[] { "duration", "bit_rate" });
+		var audioEntries = ProbeAudioEntries(audioPath, new[] { "sample_rate", "channels" }, ffprobePath);
+		var formatEntries = ProbeFormatEntries(audioPath, new[] { "duration", "bit_rate" }, ffprobePath);
 
 		var duration = double.Parse(formatEntries["duration"], CultureInfo.InvariantCulture);
 		var sampleRate = int.Parse(audioEntries["sample_rate"], CultureInfo.InvariantCulture);
@@ -130,13 +139,17 @@ public static class Ffprobe
 
 	/// <summary>Python: <c>extract_static_video_metadata</c> (memoized).</summary>
 	public static VideoMetadata ExtractStaticVideoMetadata(string videoPath)
-		=> StaticVideoMetadataCache.GetOrAdd(videoPath, ExtractVideoMetadata);
+		=> StaticVideoMetadataCache.GetOrAdd(videoPath, path => ExtractVideoMetadata(path));
 
-	/// <summary>Python: <c>extract_video_metadata</c>.</summary>
-	public static VideoMetadata ExtractVideoMetadata(string videoPath)
+	/// <summary>
+	/// Python: <c>extract_video_metadata</c>. See <see cref="ExtractAudioMetadata"/>'s doc
+	/// comment for <paramref name="ffprobePath"/> and for why throwing when ffprobe is absent
+	/// is faithful Python parity rather than a bug to fix.
+	/// </summary>
+	public static VideoMetadata ExtractVideoMetadata(string videoPath, string? ffprobePath = null)
 	{
-		var videoEntries = ProbeVideoEntries(videoPath, new[] { "width", "height", "r_frame_rate", "color_transfer" });
-		var formatEntries = ProbeFormatEntries(videoPath, new[] { "duration", "bit_rate" });
+		var videoEntries = ProbeVideoEntries(videoPath, new[] { "width", "height", "r_frame_rate", "color_transfer" }, ffprobePath);
+		var formatEntries = ProbeFormatEntries(videoPath, new[] { "duration", "bit_rate" }, ffprobePath);
 
 		var duration = double.Parse(formatEntries["duration"], CultureInfo.InvariantCulture);
 		var fps = ExtractVideoFps(videoEntries.GetValueOrDefault("r_frame_rate"));

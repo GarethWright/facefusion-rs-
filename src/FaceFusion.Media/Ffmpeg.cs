@@ -65,12 +65,13 @@ public static class Ffmpeg
 		UpdateProgress updateProgress,
 		ProcessManager? processManager = null,
 		Logger? logger = null,
-		LogLevel? logLevel = null)
+		LogLevel? logLevel = null,
+		string? ffmpegPath = null)
 	{
 		var extendedCommands = new List<string>(commands);
 		extendedCommands.AddRange(FfmpegBuilder.SetProgress());
 		extendedCommands.AddRange(FfmpegBuilder.CastStream());
-		var fullCommands = FfmpegBuilder.Run(extendedCommands);
+		var fullCommands = FfmpegBuilder.Run(extendedCommands, ffmpegPath);
 		var process = ProcessRunner.TryStart(fullCommands);
 
 		if (process is null)
@@ -121,9 +122,10 @@ public static class Ffmpeg
 		IReadOnlyList<string> commands,
 		ProcessManager? processManager = null,
 		Logger? logger = null,
-		LogLevel? logLevel = null)
+		LogLevel? logLevel = null,
+		string? ffmpegPath = null)
 	{
-		var fullCommands = FfmpegBuilder.Run(commands);
+		var fullCommands = FfmpegBuilder.Run(commands, ffmpegPath);
 		var process = ProcessRunner.TryStart(fullCommands);
 
 		if (process is null)
@@ -157,9 +159,9 @@ public static class Ffmpeg
 	/// mirroring Python's <c>stderr = subprocess.DEVNULL</c>), stdout is piped out for the
 	/// caller to read raw frame/audio bytes from.
 	/// </summary>
-	public static Process? OpenFfmpeg(IReadOnlyList<string> commands)
+	public static Process? OpenFfmpeg(IReadOnlyList<string> commands, string? ffmpegPath = null)
 	{
-		var fullCommands = FfmpegBuilder.Run(commands);
+		var fullCommands = FfmpegBuilder.Run(commands, ffmpegPath);
 		return ProcessRunner.TryStart(fullCommands, redirectStdin: true, redirectStderr: false);
 	}
 
@@ -190,12 +192,13 @@ public static class Ffmpeg
 	public static EncoderSet GetAvailableEncoderSet(
 		ProcessManager? processManager = null,
 		Logger? logger = null,
-		LogLevel? logLevel = null)
+		LogLevel? logLevel = null,
+		string? ffmpegPath = null)
 	{
 		var audioEncoders = new List<AudioEncoder>();
 		var videoEncoders = new List<VideoEncoder>();
 		var commands = FfmpegBuilder.Chain(FfmpegBuilder.GetEncoders());
-		var process = RunFfmpeg(commands, processManager, logger, logLevel);
+		var process = RunFfmpeg(commands, processManager, logger, logLevel, ffmpegPath);
 
 		if (process is null)
 		{
@@ -315,10 +318,10 @@ public static class Ffmpeg
 	/// is not on PATH) process; the caller must dispose it to guarantee the subprocess is
 	/// terminated, including when disposed mid-pump on an exception path.
 	/// </summary>
-	public static VideoReaderProcess CreateVideoReader(string videoPath, int frameNumber, VideoMetadata videoMetadata)
+	public static VideoReaderProcess CreateVideoReader(string videoPath, int frameNumber, VideoMetadata videoMetadata, string? ffmpegPath = null)
 	{
 		var commands = BuildCreateVideoReaderCommands(videoPath, frameNumber, videoMetadata);
-		var process = OpenFfmpeg(commands);
+		var process = OpenFfmpeg(commands, ffmpegPath);
 		return new VideoReaderProcess(process, videoPath, videoMetadata, frameNumber);
 	}
 
@@ -352,14 +355,15 @@ public static class Ffmpeg
 		int outputVideoQuality,
 		VideoPreset outputVideoPreset,
 		TempPixelFormat tempPixelFormat,
-		string tempPath)
+		string tempPath,
+		string? ffmpegPath = null)
 	{
 		var tempVideoPath = TempHelper.GetTempFilePath(targetPath, tempPath);
 		var tempVideoFormat = FileSystem.GetFileFormat(tempVideoPath);
 		var resolvedVideoEncoder = ResolveVideoEncoder(tempVideoFormat, outputVideoEncoder);
 
 		var commands = BuildCreateVideoWriterCommands(tempVideoPath, tempVideoFormat, tempVideoFps, tempVideoResolution, outputVideoResolution, outputVideoFps, resolvedVideoEncoder, outputVideoQuality, outputVideoPreset, tempPixelFormat);
-		var process = OpenFfmpeg(commands);
+		var process = OpenFfmpeg(commands, ffmpegPath);
 		return new VideoWriterProcess(process, targetPath, tempVideoPath, tempVideoFps, outputVideoResolution, outputVideoFps);
 	}
 

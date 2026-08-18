@@ -15,10 +15,20 @@ public static class FfmpegBuilder
 	/// shutil.which) and the base logging flags. When ffmpeg is not on PATH, Python's
 	/// shutil.which('ffmpeg') returns None and that None ends up as the first list entry;
 	/// we reproduce that by allowing a null first element.
+	///
+	/// <para>
+	/// <paramref name="executablePath"/> is not present in the Python source — Python has no
+	/// way to override <c>shutil.which('ffmpeg')</c> either — but is a deliberate, additive
+	/// port-only extension point (see port report) so callers/tests can force the
+	/// "binary not found" path deterministically (e.g. a nonexistent path) instead of relying
+	/// on ffmpeg being absent from the machine PATH, which is not a property of this code and
+	/// stopped holding once ffmpeg was installed in the test container. Defaults to null,
+	/// which reproduces the exact prior behaviour (PATH search via <see cref="ProcessHelper.Which"/>).
+	/// </para>
 	/// </summary>
-	public static IReadOnlyList<string?> Run(IReadOnlyList<string> commands)
+	public static IReadOnlyList<string?> Run(IReadOnlyList<string> commands, string? executablePath = null)
 	{
-		var result = new List<string?> { ProcessHelper.Which("ffmpeg"), "-loglevel", "error" };
+		var result = new List<string?> { executablePath ?? ProcessHelper.Which("ffmpeg"), "-loglevel", "error" };
 		result.AddRange(commands);
 		return result;
 	}

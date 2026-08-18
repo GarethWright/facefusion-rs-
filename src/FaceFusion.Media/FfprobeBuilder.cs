@@ -14,12 +14,17 @@ namespace FaceFusion.Media
 		/// <summary>
 		/// Prepends ffprobe executable path and error logging level to commands.
 		/// Note: Returns a list that may contain null (matching Python's shutil.which behavior).
+		///
+		/// <paramref name="executablePath"/> is a deliberate, additive port-only extension
+		/// point (see <see cref="FfmpegBuilder.Run"/>'s doc comment for the same pattern and
+		/// rationale) so callers/tests can force the "binary not found" path deterministically.
+		/// Defaults to null, which reproduces the prior PATH-search-only behaviour exactly.
 		/// </summary>
-		public static IReadOnlyList<string?> Run(IReadOnlyList<string> commands)
+		public static IReadOnlyList<string?> Run(IReadOnlyList<string> commands, string? executablePath = null)
 		{
 			// TODO(types): Command type alias should be resolved when FaceFusion.Types is available
 			var result = new List<string?>();
-			result.Add(ProcessHelper.Which("ffprobe"));
+			result.Add(executablePath ?? ProcessHelper.Which("ffprobe"));
 			result.Add("-loglevel");
 			result.Add("error");
 			result.AddRange(commands);
