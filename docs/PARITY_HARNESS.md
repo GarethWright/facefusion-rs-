@@ -26,6 +26,20 @@ Ground truth crosses the boundary as NumPy `.npy` files:
 | `src/FaceFusion.Parity/TensorComparison.cs` | `numpy.allclose` semantics + failure diagnostics |
 | `src/FaceFusion.Parity/ImageMetrics.cs` | PSNR / SSIM for frame-level comparison |
 
+## A note on the SSIM reference
+
+scikit-image is not installed in the development environment, so `ImageMetrics.Ssim` could
+not be checked against `skimage.metrics.structural_similarity`. It is instead verified
+against an independent NumPy implementation of the same variant — 11x11 Gaussian window,
+sigma 1.5, "valid" convolution, population normalisation, K1 = 0.01, K2 = 0.03, equivalent
+to `gaussian_weights=True, use_sample_covariance=False` — written from the paper rather
+than transcribed from the C#. The two agree to 9 decimal places across the fixture corpus.
+
+Two independent implementations agreeing is real evidence but weaker than checking against
+the reference library, since both could share a conceptual error. **If skimage becomes
+available, assert against it directly** in `tools/parity/generate_fixtures.py` and delete
+this note.
+
 ## Capturing ground truth from Python
 
 `dump()` is a no-op unless `FACEFUSION_PARITY_DIR` is set, so the instrumentation can stay
@@ -105,3 +119,4 @@ would weaken the tests it feeds.
   arrive with Phase 6.
 - **No allocation regression test** (plan §7.6, §5a). Worth adding as soon as frames flow
   through real code.
+- **SSIM is not verified against skimage** — see the note above.

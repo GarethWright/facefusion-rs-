@@ -1,0 +1,38 @@
+{
+    "checker_vs_inverted": {
+        "height": 16,
+        "psnr": "0.0",
+        "ssim": "-0.9964064683569571",
+        "width": 16
+    },
+    "constant_vs_constant": {
+        "height": 16,
+        "psnr": "inf",
+        "ssim": "1.0",
+        "width": 16
+    },
+    "constant_vs_different": {
+        "height": 16,
+        "psnr": "16.089603782119855",
+        "ssim": "0.945957817881344",
+        "width": 16
+    },
+    "gradient_vs_noisy": {
+        "height": 16,
+        "psnr": "22.383571089350454",
+        "ssim": "0.7932264608556827",
+        "width": 16
+    },
+    "gradient_vs_offset": {
+        "height": 16,
+        "psnr": "28.130803608679106",
+        "ssim": "0.9962779184971442",
+        "width": 16
+    },
+    "identical_gradient": {
+        "height": 16,
+        "psnr": "inf",
+        "ssim": "1.0",
+        "width": 16
+    }
+}
