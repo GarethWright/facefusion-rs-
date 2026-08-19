@@ -95,6 +95,13 @@ type per file; file name matches the type name.
   once showing 886 of 924. When a run matters, compare its total against
   `dotnet test --list-tests | grep -c "^    "`. And never run a memory-heavy job (an
   `age_modifier` video, say) alongside the suite: that is exactly what killed that host.
+- **A green local suite is not a green CI suite.** CI has neither the example media
+  (`/tmp/facefusion-test-examples`, fetched by `tools/parity/fetch_examples.sh`) nor the
+  gitignored models under `.assets/models`, so any test that reaches for them must skip, per
+  rule 2 — never fail. `VisionParityTests` hardcoded those paths with no gate, passed here for
+  weeks, and failed eleven cases on all three runners the first time CI got far enough to run
+  tests at all. Before trusting a suite, run `tools/parity/ci_simulate.sh`, which moves both
+  aside and restores them on exit.
 - **The OpenCvSharp analyzer only runs in CI.** It targets Roslyn 4.14 and this container's SDK
   is 4.8, so the compiler skips it with a `CS9057` warning and its diagnostics never appear
   locally. With `TreatWarningsAsErrors` on they are build *errors* in CI — `OCVS002` ("`Rows` is

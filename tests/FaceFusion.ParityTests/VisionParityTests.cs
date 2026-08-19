@@ -51,7 +51,43 @@ public sealed class VisionParityTests
         Path.Combine(System.AppContext.BaseDirectory, "fixtures", "vision");
 
     private const string Video240p = "/tmp/facefusion-test-examples/target-240p.mp4";
+    private const string Video1080p = "/tmp/facefusion-test-examples/target-1080p.mp4";
     private const string SourceImage = "/tmp/facefusion-test-examples/source.jpg";
+
+    /// <summary>
+    /// The example media is fetched by <c>tools/parity/fetch_examples.sh</c> and is deliberately
+    /// not committed (it is ~80 MB of video), so it is absent in CI. Tests that decode it must
+    /// skip rather than fail — PORT_CONVENTIONS.md rule 2. Every sibling parity class already
+    /// gates this way; this one did not, and its eleven cases failed the .NET build on all three
+    /// runners the first time CI got far enough to run tests at all.
+    /// </summary>
+    internal static bool ExampleMediaAvailable =>
+        File.Exists(Video240p) && File.Exists(Video1080p) && File.Exists(SourceImage);
+
+    private const string MissingExampleMediaMessage =
+        "requires the example media in /tmp/facefusion-test-examples — run tools/parity/fetch_examples.sh, then retry";
+
+    private sealed class ExampleMediaFactAttribute : FactAttribute
+    {
+        public ExampleMediaFactAttribute()
+        {
+            if (!ExampleMediaAvailable)
+            {
+                Skip = MissingExampleMediaMessage;
+            }
+        }
+    }
+
+    private sealed class ExampleMediaTheoryAttribute : TheoryAttribute
+    {
+        public ExampleMediaTheoryAttribute()
+        {
+            if (!ExampleMediaAvailable)
+            {
+                Skip = MissingExampleMediaMessage;
+            }
+        }
+    }
 
     // -----------------------------------------------------------------
     // Video metadata: OpenCvSharp.VideoCapture vs Python's ffprobe-backed values.
@@ -60,7 +96,7 @@ public sealed class VisionParityTests
     public static IEnumerable<object[]> VideoMetadataCases()
     {
         yield return new object[] { "target_240p", Video240p };
-        yield return new object[] { "target_1080p", "/tmp/facefusion-test-examples/target-1080p.mp4" };
+        yield return new object[] { "target_1080p", Video1080p };
     }
 
     /// <summary>
@@ -72,7 +108,7 @@ public sealed class VisionParityTests
     /// here — but this test is what would catch it the day a container shows up where they
     /// disagree, so the tolerance stays exact rather than padded defensively.
     /// </summary>
-    [Theory]
+    [ExampleMediaTheory]
     [MemberData(nameof(VideoMetadataCases))]
     public void VideoMetadataMatchesFfprobe(string caseName, string videoPath)
     {
@@ -95,7 +131,7 @@ public sealed class VisionParityTests
         Assert.Equal(expectedFrameTotal, actualFrameTotal);
     }
 
-    [Fact]
+    [ExampleMediaFact]
     public void PredictVideoFrameTotalMatches()
     {
 
@@ -114,7 +150,7 @@ public sealed class VisionParityTests
         }
     }
 
-    [Fact]
+    [ExampleMediaFact]
     public void RestrictTrimFrameMatches()
     {
 
@@ -141,7 +177,7 @@ public sealed class VisionParityTests
     // Image resolution / resolution packing (pure math — exact).
     // -----------------------------------------------------------------
 
-    [Fact]
+    [ExampleMediaFact]
     public void DetectImageResolutionMatches()
     {
 
@@ -193,7 +229,7 @@ public sealed class VisionParityTests
     /// mean the two builds disagree on JPEG decoding, which is worth knowing about exactly,
     /// not smoothing over.
     /// </summary>
-    [Fact]
+    [ExampleMediaFact]
     public void ReadStaticImageMatchesPythonDecode()
     {
 
@@ -229,7 +265,7 @@ public sealed class VisionParityTests
     /// divergence gets meaningfully worse.
     /// </para>
     /// </summary>
-    [Theory]
+    [ExampleMediaTheory]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(50)]
