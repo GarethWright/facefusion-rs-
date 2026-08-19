@@ -193,12 +193,17 @@ public sealed class ProcessorParityTests4
         using var result = DeepSwapper.PrepareCropMask(sourceMask, targetMask, new Size(modelSize.Shape[1], modelSize.Shape[0]));
 
         var expected = LoadNpy("deep_swapper", "crop_mask").AsDoubles();
-        var actual = new double[result.Rows * result.Cols];
-        for (var row = 0; row < result.Rows; row++)
+        // Rows/Cols are P/Invoke calls, so they are read once rather than per iteration
+        // (OpenCvSharp analyzer OCVS002).
+        var rowTotal = result.Rows;
+        var colTotal = result.Cols;
+        var actual = new double[rowTotal * colTotal];
+
+        for (var row = 0; row < rowTotal; row++)
         {
-            for (var col = 0; col < result.Cols; col++)
+            for (var col = 0; col < colTotal; col++)
             {
-                actual[(row * result.Cols) + col] = result.At<float>(row, col);
+                actual[(row * colTotal) + col] = result.At<float>(row, col);
             }
         }
 

@@ -95,6 +95,12 @@ type per file; file name matches the type name.
   once showing 886 of 924. When a run matters, compare its total against
   `dotnet test --list-tests | grep -c "^    "`. And never run a memory-heavy job (an
   `age_modifier` video, say) alongside the suite: that is exactly what killed that host.
+- **The OpenCvSharp analyzer only runs in CI.** It targets Roslyn 4.14 and this container's SDK
+  is 4.8, so the compiler skips it with a `CS9057` warning and its diagnostics never appear
+  locally. With `TreatWarningsAsErrors` on they are build *errors* in CI — `OCVS002` ("`Rows` is
+  a P/Invoke call on every iteration") failed the .NET build on all three OSes while the local
+  build was clean. Cache `Mat.Rows`/`Mat.Cols` outside any loop as a matter of course, and treat
+  a green local build as no evidence about this analyzer.
 - **A Blazor component only re-renders itself.** An event handler re-renders the component that
   owns it, so a control that writes shared state does not re-render the sibling panel whose
   `@if` reads it. Every component that reads `UiState` derives from `UiComponentBase`, which

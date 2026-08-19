@@ -588,9 +588,14 @@ public sealed class FaceHelperTests
     private static long SumPixels(Mat frame)
     {
         long sum = 0;
-        for (var r = 0; r < frame.Rows; r++)
+        // Rows/Cols are P/Invoke calls, so they are read once rather than per iteration
+        // (OpenCvSharp analyzer OCVS002).
+        var rowTotal = frame.Rows;
+        var colTotal = frame.Cols;
+
+        for (var r = 0; r < rowTotal; r++)
         {
-            for (var c = 0; c < frame.Cols; c++)
+            for (var c = 0; c < colTotal; c++)
             {
                 var pixel = frame.At<Vec3b>(r, c);
                 sum += pixel.Item0 + pixel.Item1 + pixel.Item2;
