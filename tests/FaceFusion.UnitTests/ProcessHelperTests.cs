@@ -15,7 +15,11 @@ public class ProcessHelperTests
 
 		Assert.NotNull(result);
 		Assert.True(File.Exists(result));
-		Assert.Equal("curl", Path.GetFileName(result));
+
+		// On Windows the resolved file carries a PATHEXT extension (curl.EXE), because
+		// ProcessHelper.Which appends PATHEXT candidates exactly as shutil.which does. Asserting
+		// the bare name here is a POSIX assumption, not a property of Which.
+		Assert.Equal("curl", Path.GetFileNameWithoutExtension(result), ignoreCase: true);
 	}
 
 	[Fact]
@@ -61,12 +65,23 @@ public class ProcessHelperTests
 	public void TestWhichIsConsistentWithManualPathSearch()
 	{
 		// Cross-check against an independent PATH walk (not the production implementation)
-		// so this test is not vacuous against ProcessHelper.Which itself.
+		// so this test is not vacuous against ProcessHelper.Which itself. The walk has to model
+		// PATHEXT on Windows for the same reason Which does: there is no bare "curl" on PATH
+		// there, only curl.EXE, so a POSIX-only walk found nothing and expected null while Which
+		// correctly returned C:\Windows\system32\curl.EXE.
+		var candidateNames = OperatingSystem.IsWindows()
+			? new[] { "curl" }
+				.Concat((Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
+					.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+					.Select(extension => "curl" + extension))
+				.ToArray()
+			: new[] { "curl" };
+
 		var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 		var expected = pathVariable
 			.Split(Path.PathSeparator)
 			.Where(directory => !string.IsNullOrEmpty(directory))
-			.Select(directory => Path.Combine(directory, "curl"))
+			.SelectMany(directory => candidateNames.Select(name => Path.Combine(directory, name)))
 			.FirstOrDefault(File.Exists);
 
 		Assert.Equal(expected, ProcessHelper.Which("curl"));

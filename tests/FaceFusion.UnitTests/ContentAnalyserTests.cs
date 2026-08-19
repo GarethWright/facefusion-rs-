@@ -114,8 +114,39 @@ public sealed class ContentAnalyserTests
         var contentAnalyserPath = Path.Combine(repoRoot!, "src", "FaceFusion.Face", "ContentAnalyser.cs");
         Assert.True(File.Exists(contentAnalyserPath), "expected src/FaceFusion.Face/ContentAnalyser.cs to exist at the repo root");
 
-        var expected = HashHelper.CreateHash(File.ReadAllBytes(contentAnalyserPath));
+        // Normalized, not raw: ComputeSourceHash collapses CRLF to LF so the same source text
+        // hashes identically on every platform (see NormalizeLineEndings' remarks — hashing raw
+        // bytes made the gate fail closed on every Windows run). Comparing against raw bytes
+        // here would re-assert the defect.
+        var bytes = ContentAnalyser.NormalizeLineEndings(File.ReadAllBytes(contentAnalyserPath));
+        var expected = HashHelper.CreateHash(bytes);
         Assert.Equal(expected, ContentAnalyser.ComputeSourceHash());
+    }
+
+    /// <summary>
+    /// The property the Windows fix exists for: the same source text must hash the same whether
+    /// it was checked out with LF or CRLF. Regression cover for the defect where the
+    /// content-analyser gate — which fails closed — rejected every run on Windows because git
+    /// had checked the file out with CRLF.
+    /// </summary>
+    [Fact]
+    public void ComputeSourceHashIsIndependentOfLineEndings()
+    {
+        var repoRoot = FindRepoRoot();
+        Assert.NotNull(repoRoot);
+
+        var contentAnalyserPath = Path.Combine(repoRoot!, "src", "FaceFusion.Face", "ContentAnalyser.cs");
+        var lfBytes = File.ReadAllBytes(contentAnalyserPath);
+        var crlfBytes = System.Text.Encoding.UTF8.GetBytes(
+            System.Text.Encoding.UTF8.GetString(lfBytes).Replace("\n", "\r\n", StringComparison.Ordinal));
+
+        // Sanity: the two really are different byte sequences, or this proves nothing.
+        Assert.True(crlfBytes.Length > lfBytes.Length);
+        Assert.NotEqual(HashHelper.CreateHash(lfBytes), HashHelper.CreateHash(crlfBytes));
+
+        Assert.Equal(
+            HashHelper.CreateHash(ContentAnalyser.NormalizeLineEndings(lfBytes)),
+            HashHelper.CreateHash(ContentAnalyser.NormalizeLineEndings(crlfBytes)));
     }
 
     [Fact]

@@ -382,10 +382,20 @@ carries Python's own Windows workaround (`cv2.imencode` then write the bytes); t
 uses it, which fixes the failure and means these tests read back a file written by the same code
 path a real run uses.
 
+**Three tests then failed because they, not the port, assumed POSIX.** `ProcessHelper.Which`
+appends `PATHEXT` candidates on Windows exactly as `shutil.which` does, so it correctly resolves
+`C:\Windows\system32\curl.EXE` — but one test asserted the resolved file was named bare `curl`,
+and another cross-checked against a PATH walk that only looked for `curl`, expected null, and so
+failed *because the production code was right*. Both now model `PATHEXT` on Windows. The third,
+`ComputeSourceHashMatchesHashHelperOverTheSameBytes`, compared against raw file bytes and so
+re-asserted the CRLF defect above; it now compares against normalised bytes, and a new
+`ComputeSourceHashIsIndependentOfLineEndings` pins the actual property by hashing the same file
+in both forms — that one runs on every platform, so the Windows condition is covered from Linux.
+
 Worth noting what this says about the port's Windows support generally: it had never been
 executed on Windows even once, and the first honest attempt found a defect that made the whole
 CLI refuse to start. Linux remains the only platform where the port has been run end to end
-against Python.
+against Python — Windows has a green test suite, which is a much weaker claim.
 
 ## Supported platforms: linux-x64 and win-x64, not macOS
 
