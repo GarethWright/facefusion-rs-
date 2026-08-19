@@ -76,11 +76,21 @@ public sealed class VisionFixture : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes through the port's own <see cref="FaceFusion.Vision.Vision.WriteImage"/> rather
+    /// than <see cref="Cv2.ImWrite"/> directly. That is not incidental: OpenCvSharp marshals a
+    /// path to the native call as ANSI, so <c>Cv2.ImWrite</c> throws "Cannot marshal: Encountered
+    /// unmappable character" on Windows for this fixture's deliberately non-ASCII
+    /// <c>目标-240p.png</c>. The constructor then failed, and with it all eleven tests in this
+    /// class. <c>Vision.WriteImage</c> already carries Python's own Windows workaround
+    /// (<c>cv2.imencode</c> + write the bytes), so using it both fixes the fixture and means the
+    /// file these tests read back was written by the code path a real run uses.
+    /// </summary>
     private string WriteImage(string fileName, int width, int height)
     {
         var path = Path.Combine(Directory, fileName);
         using var image = new Mat(new Size(width, height), MatType.CV_8UC3, new Scalar(60, 90, 120));
-        Cv2.ImWrite(path, image);
+        FaceFusion.Vision.Vision.WriteImage(path, image);
         return path;
     }
 

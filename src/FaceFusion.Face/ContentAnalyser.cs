@@ -600,6 +600,48 @@ public sealed class ContentAnalyser
     /// throws — when the source file cannot be found or read, so callers have an explicit
     /// "could not verify" signal distinct from any real hash value.
     /// </summary>
+    /// <summary>
+    /// Collapses CRLF to LF before hashing, so the same source text hashes identically on every
+    /// platform.
+    ///
+    /// <para>
+    /// <b>Why this is necessary, and why it does not weaken the gate.</b> Git checks this file
+    /// out with CRLF on Windows by default, so hashing the raw bytes produced a different value
+    /// there — a different value against the pinned one — and the gate tripped on
+    /// every run. Because it fails closed, the effect was that <c>common_pre_check</c> refused
+    /// to start *any* processing on Windows at all. Line endings are a representation of the
+    /// same source text, not part of it: an edit that weakens a threshold, changes the vote rule
+    /// or stubs out a detector still changes this hash, which is the property the gate exists
+    /// for. Only the choice of newline is neutralised.
+    /// </para>
+    ///
+    /// <para>
+    /// A lone CR (old-Mac line endings) is deliberately left alone — it is not a line ending any
+    /// checkout produces today, and rewriting it would widen what the hash treats as equivalent
+    /// beyond the one case that actually occurs.
+    /// </para>
+    /// </summary>
+    internal static byte[] NormalizeLineEndings(byte[] bytes)
+    {
+        const byte carriageReturn = 0x0D;
+        const byte lineFeed = 0x0A;
+
+        var normalized = new byte[bytes.Length];
+        var length = 0;
+
+        for (var index = 0; index < bytes.Length; index++)
+        {
+            if (bytes[index] == carriageReturn && index + 1 < bytes.Length && bytes[index + 1] == lineFeed)
+            {
+                continue;
+            }
+
+            normalized[length++] = bytes[index];
+        }
+
+        return length == bytes.Length ? normalized : normalized[..length];
+    }
+
     public static string? ComputeSourceHash()
     {
         try
@@ -610,7 +652,7 @@ public sealed class ContentAnalyser
             }
 
             var bytes = File.ReadAllBytes(ThisSourceFilePath);
-            return HashHelper.CreateHash(bytes);
+            return HashHelper.CreateHash(NormalizeLineEndings(bytes));
         }
         catch (IOException)
         {

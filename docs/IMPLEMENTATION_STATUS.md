@@ -356,6 +356,37 @@ on the same input and the outputs compared.** Anything else keeps its named
 assembled pipeline had never once executed — which is how the `PixelBoost` dtype defect
 survived to be found here.
 
+## Two Windows defects the CI matrix exposed
+
+Shipping the Windows native took that runner from 123 failures to 37, and the remainder were
+real cross-platform defects rather than test noise.
+
+**The content-analyser gate refused to run at all on Windows.** `ComputeSourceHash` hashed the
+raw bytes of `ContentAnalyser.cs`, and git checks that file out with CRLF on Windows, so the
+hash came out `e498bdbf` against the pinned value. Because the gate fails closed by design,
+`common_pre_check` then declined to start *any* processing — the CLI was unusable on Windows,
+and the only reason a test caught it is that the pinned hash has its own assertion.
+
+The fix collapses CRLF to LF before hashing. That keeps the tamper-evident property intact: an
+edit weakening a threshold, changing the vote rule or stubbing out a detector still changes the
+hash; only the choice of newline is neutralised. Verified by hashing the same file in both forms
+— raw gives `787aafab` and `add7aaa8`, normalised gives `787aafab` for both. (Editing the file
+changed its own hash, so the pinned constant in `PreCheck.cs` moved to `787aafab` — the
+fixed-point update the design always anticipated.)
+
+**`VisionTests` could not build its fixture on Windows.** The fixture wrote its images with
+`Cv2.ImWrite` directly, and OpenCvSharp marshals paths to the native call as ANSI, so the
+deliberately non-ASCII `目标-240p.png` threw "Cannot marshal: Encountered unmappable character".
+The constructor died and took all eleven tests in the class with it. `Vision.WriteImage` already
+carries Python's own Windows workaround (`cv2.imencode` then write the bytes); the fixture now
+uses it, which fixes the failure and means these tests read back a file written by the same code
+path a real run uses.
+
+Worth noting what this says about the port's Windows support generally: it had never been
+executed on Windows even once, and the first honest attempt found a defect that made the whole
+CLI refuse to start. Linux remains the only platform where the port has been run end to end
+against Python.
+
 ## Supported platforms: linux-x64 and win-x64, not macOS
 
 The port runs where a matching native OpenCV binary exists, and that is not everywhere. This

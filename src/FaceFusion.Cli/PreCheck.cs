@@ -32,7 +32,7 @@ public static class PreCheck
     /// <c>ContentAnalyser.ComputeSourceHash()</c> returns the current value. Updating it to
     /// silence a failure defeats the entire mechanism.
     /// </summary>
-    public const string ContentAnalyserHash = "e5aab047";
+    public const string ContentAnalyserHash = "787aafab";
 
     /// <summary>
     /// Python: <c>pre_check</c> — verifies the external tools the port shells out to are
