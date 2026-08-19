@@ -10,7 +10,20 @@
 
   <ItemGroup>
     <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
+    <!--
+      Both native runtimes are referenced unconditionally rather than behind an OS condition:
+      NuGet lays each one out under runtimes/<rid>/native and the host picks the matching RID at
+      load time, so a build produced on Linux still carries the Windows native. Conditioning on
+      the BUILD host would silently produce a Windows binary with no OpenCvSharpExtern in it.
+
+      macOS is deliberately absent. There is no official Apple Silicon native at this OpenCV
+      version — only OpenCvSharp4.runtime.osx_arm64 4.8.1, five minor versions behind the managed
+      4.13 — and pairing a mismatched native with the managed assembly risks wrong pixels rather
+      than an honest crash, which is the one failure mode a parity-focused port cannot accept.
+      The dotnet CI matrix therefore covers ubuntu and windows only; see .github/workflows/dotnet.yml.
+    -->
     <PackageReference Include="OpenCvSharp4.official.runtime.linux-x64" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
   </ItemGroup>
 
   <PropertyGroup>

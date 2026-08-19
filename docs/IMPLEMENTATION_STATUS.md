@@ -356,6 +356,29 @@ on the same input and the outputs compared.** Anything else keeps its named
 assembled pipeline had never once executed — which is how the `PixelBoost` dtype defect
 survived to be found here.
 
+## Supported platforms: linux-x64 and win-x64, not macOS
+
+The port runs where a matching native OpenCV binary exists, and that is not everywhere. This
+went unnoticed for the whole port because every run happened on one Linux container; CI found it
+the first time it got far enough to execute tests, with 123 macOS failures all reading
+`DllNotFoundException: Unable to load shared library 'OpenCvSharpExtern'`.
+
+| Platform | Native package | Version against managed OpenCvSharp4 4.13.0.20260627 |
+| --- | --- | --- |
+| linux-x64 | `OpenCvSharp4.official.runtime.linux-x64` | exact match |
+| win-x64 | `OpenCvSharp4.runtime.win` | exact match |
+| osx-arm64 | `OpenCvSharp4.runtime.osx_arm64` | **4.8.1 only** — five minor versions behind |
+| osx-x64 | `OpenCvSharp4.runtime.osx.10.15-x64` | 4.6.0 only, and `macos-latest` is arm64 |
+
+Windows is now referenced and covered by CI. macOS is deliberately not: there is no official
+Apple Silicon build at this OpenCV version, and pairing a mismatched native with the managed
+assembly risks wrong pixels rather than an honest crash — the one failure mode a port whose
+entire value is pixel parity cannot accept. Revisit when OpenCvSharp ships an Apple Silicon
+native at a matching version.
+
+ONNX Runtime is not a constraint here: `Microsoft.ML.OnnxRuntime` 1.29.0 ships natives for
+linux-x64, win-x64, osx-arm64 and more. OpenCV is the only blocker.
+
 ## The memory defect: diagnosed, measured, and fixed
 
 `age_modifier` on **8 frames of a 426x226 clip** used to be killed by the OOM killer. It now

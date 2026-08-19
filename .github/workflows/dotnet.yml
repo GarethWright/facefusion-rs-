@@ -4,13 +4,23 @@ on: [ push, pull_request ]
 
 # CI for the .NET port (see docs/DOTNET_PORT_PLAN.md). The existing Python `ci`
 # workflow is untouched and keeps running against facefusion/ during the transition.
+#
+# macOS is deliberately not in the matrix. OpenCvSharp has no official Apple Silicon native at
+# the OpenCV version this port uses (only OpenCvSharp4.runtime.osx_arm64 4.8.1 against managed
+# 4.13), so every OpenCV call there fails with DllNotFoundException: OpenCvSharpExtern. It was
+# in the matrix and failing 123 tests for exactly that reason. Adding the mismatched native
+# would risk wrong pixels instead of an honest crash, which is the one failure a parity-focused
+# port cannot accept — see the comment in src/FaceFusion.Vision/FaceFusion.Vision.csproj.
+#
+# The runners have neither the example media (tools/parity/fetch_examples.sh) nor the gitignored
+# models, so the tests that need them skip. tools/parity/ci_simulate.sh reproduces that locally.
 
 jobs:
  build:
   strategy:
    fail-fast: false
    matrix:
-    os: [ ubuntu-latest, windows-latest, macos-latest ]
+    os: [ ubuntu-latest, windows-latest ]
   runs-on: ${{ matrix.os }}
   steps:
   - name: Checkout
