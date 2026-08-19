@@ -136,7 +136,15 @@ public sealed class ContentAnalyserTests
         Assert.NotNull(repoRoot);
 
         var contentAnalyserPath = Path.Combine(repoRoot!, "src", "FaceFusion.Face", "ContentAnalyser.cs");
-        var lfBytes = File.ReadAllBytes(contentAnalyserPath);
+
+        // Normalize what is on disk FIRST, rather than assuming it is LF. On Windows git checks
+        // this file out as CRLF, so treating the raw bytes as the LF baseline and replacing "\n"
+        // with "\r\n" produced CR CR LF — not a line ending any checkout makes, and not one
+        // NormalizeLineEndings claims to collapse, so the test failed on Windows for a reason
+        // that had nothing to do with the property under test. Deriving both forms from a
+        // canonical LF baseline makes this checkout-agnostic.
+        var onDiskBytes = File.ReadAllBytes(contentAnalyserPath);
+        var lfBytes = ContentAnalyser.NormalizeLineEndings(onDiskBytes);
         var crlfBytes = System.Text.Encoding.UTF8.GetBytes(
             System.Text.Encoding.UTF8.GetString(lfBytes).Replace("\n", "\r\n", StringComparison.Ordinal));
 
