@@ -1,0 +1,56 @@
+@inherits UiComponentBase
+@*
+    Gradio: gradio.Slider(label = ..., value = ..., step = ..., minimum = ..., maximum = ...).
+    Python declares these ranges as an explicit choice list (create_int_range /
+    create_float_range), so the descriptor's choices ARE the slider's stops — the control walks
+    that list by index rather than inventing a min/max/step, which keeps it exact for the
+    irregular ranges too.
+*@
+
+<div class="ff-field">
+    <label for="@_id">@Label <span class="ff-value">@Display</span></label>
+    <input id="@_id" type="range" min="0" max="@(_stops.Count - 1)" step="1" value="@Index" @oninput="OnInput" />
+</div>
+
+@code {
+    private readonly string _id = "ff-" + Guid.NewGuid().ToString("N")[..8];
+    private IReadOnlyList<string> _stops = Array.Empty<string>();
+
+    [Parameter, EditorRequired] public string StateKey { get; set; } = string.Empty;
+    [Parameter] public string? Title { get; set; }
+
+    private string Label => Title ?? UiLabels.Humanize(StateKey);
+
+    private string Display => State.GetString(StateKey) ?? string.Empty;
+
+    private int Index
+    {
+        get
+        {
+            var current = State.GetString(StateKey);
+            var index = current is null ? -1 : _stops.ToList().IndexOf(current);
+            return index >= 0 ? index : 0;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        var descriptor = UiOptionDescriptors.Get(StateKey);
+        _stops = descriptor.Choices;
+
+        if (_stops.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"'{StateKey}' has no choice list, so it cannot be a slider — use OptionNumber instead.");
+        }
+    }
+
+    private void OnInput(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
+            && index >= 0 && index < _stops.Count)
+        {
+            State.SetString(StateKey, _stops[index]);
+        }
+    }
+}

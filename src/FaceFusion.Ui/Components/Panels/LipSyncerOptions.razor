@@ -1,0 +1,15 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/lip_syncer_options.py. Python shows this block only
+    while 'lip_syncer' is in the processors checkbox group (its listen() toggles visibility
+    on that group's change event); the same condition is expressed directly here.
+*@
+
+@if (State.GetList("processors").Contains("lip_syncer"))
+{
+    <section class="ff-panel">
+        <h2>LIP SYNCER</h2>
+        <OptionDropdown StateKey="lip_syncer_model" />
+        <OptionSlider StateKey="lip_syncer_weight" />
+    </section>
+}

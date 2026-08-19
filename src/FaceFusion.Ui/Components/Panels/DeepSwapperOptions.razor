@@ -1,0 +1,15 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/deep_swapper_options.py. Python shows this block only
+    while 'deep_swapper' is in the processors checkbox group (its listen() toggles visibility
+    on that group's change event); the same condition is expressed directly here.
+*@
+
+@if (State.GetList("processors").Contains("deep_swapper"))
+{
+    <section class="ff-panel">
+        <h2>DEEP SWAPPER</h2>
+        <OptionDropdown StateKey="deep_swapper_model" />
+        <OptionSlider StateKey="deep_swapper_morph" />
+    </section>
+}

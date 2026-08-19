@@ -1,0 +1,61 @@
+@page "/"
+@rendermode InteractiveServer
+@*
+    Port of facefusion/uis/layouts/default.py — the three-column layout, in the same order
+    Python renders it (settings, sources/output/terminal, preview and face options).
+
+    Plan §6: "The 4 layouts are not equal in value. `default` is the product; `benchmark` and
+    `jobs` duplicate CLI functionality and can be dropped or deferred without user harm."
+    Those two are deliberately not ported; `webcam` is Phase 8.
+*@
+
+<nav class="ff-nav"><a href="/webcam">webcam layout →</a></nav>
+
+<div class="ff-layout">
+    <div class="ff-column">
+        <AboutPanel />
+        <ProcessorsPanel />
+        <AgeModifierOptions />
+        <BackgroundRemoverOptions />
+        <DeepSwapperOptions />
+        <ExpressionRestorerOptions />
+        <FaceDebuggerOptions />
+        <FaceEditorOptions />
+        <FaceEnhancerOptions />
+        <FaceSwapperOptions />
+        <FrameColorizerOptions />
+        <FrameEnhancerOptions />
+        <LipSyncerOptions />
+        <VoiceExtractorPanel />
+        <WorkflowPanel />
+        <ExecutionPanel />
+        <DownloadPanel />
+        <MemoryPanel />
+        <TempFramePanel />
+        <OutputOptionsPanel />
+    </div>
+
+    <div class="ff-column">
+        <SourcePanel />
+        <TargetPanel />
+        <OutputPanel />
+        <InstantRunnerPanel />
+        <TerminalPanel />
+    </div>
+
+    <div class="ff-column ff-column-wide">
+        <PreviewPanel />
+        <TrimFramePanel />
+        <FaceSelectorPanel />
+        <FaceTrackerPanel />
+        <FaceMaskerPanel />
+        <FaceDetectorPanel />
+        <FaceLandmarkerPanel />
+    </div>
+</div>
+
+@code {
+    // No subscription here. Every panel and control derives from UiComponentBase, which
+    // subscribes to UiState.Changed itself — see that class's remarks for why a single
+    // layout-level subscription silently failed to re-render sibling panels.
+}

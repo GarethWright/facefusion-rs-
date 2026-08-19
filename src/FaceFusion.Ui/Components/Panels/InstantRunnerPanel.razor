@@ -1,0 +1,29 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/instant_runner.py — the START button.
+*@
+@inject UiRunner Runner
+
+<section class="ff-panel">
+    <h2>RUN</h2>
+    <button class="ff-button-primary" disabled="@Runner.IsRunning" @onclick="Runner.StartAsync">
+        @(Runner.IsRunning ? "RUNNING…" : "START")
+    </button>
+    <button class="ff-button-small" disabled="@Runner.IsRunning" @onclick="State.Reset">RESET SETTINGS</button>
+</section>
+
+@code {
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Runner.StateChanged += OnRunnerStateChanged;
+    }
+
+    public override void Dispose()
+    {
+        Runner.StateChanged -= OnRunnerStateChanged;
+        base.Dispose();
+    }
+
+    private void OnRunnerStateChanged() => _ = InvokeAsync(StateHasChanged);
+}

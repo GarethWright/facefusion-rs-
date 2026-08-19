@@ -1,0 +1,27 @@
+@inherits UiComponentBase
+@*
+    Gradio: gradio.Textbox / gradio.Number, for the options argparse leaves free-form (paths,
+    unbounded ints such as --reference-face-position, and the int-list paddings).
+*@
+
+<div class="ff-field">
+    <label for="@_id">@Label</label>
+    <input id="@_id" type="text" value="@(State.GetString(StateKey) ?? string.Empty)"
+           placeholder="@Placeholder" @onchange="OnChanged" />
+</div>
+
+@code {
+    private readonly string _id = "ff-" + Guid.NewGuid().ToString("N")[..8];
+
+    [Parameter, EditorRequired] public string StateKey { get; set; } = string.Empty;
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+
+    private string Label => Title ?? UiLabels.Humanize(StateKey);
+
+    private void OnChanged(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+        State.SetString(StateKey, string.IsNullOrWhiteSpace(value) ? null : value);
+    }
+}

@@ -1,0 +1,14 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/face_masker.py.
+*@
+<section class="ff-panel">
+    <h2>FACE MASKER</h2>
+    <OptionCheckboxGroup StateKey="face_mask_types" />
+    <OptionDropdown StateKey="face_occluder_model" />
+    <OptionDropdown StateKey="face_parser_model" />
+    <OptionCheckboxGroup StateKey="face_mask_areas" />
+    <OptionCheckboxGroup StateKey="face_mask_regions" />
+    <OptionSlider StateKey="face_mask_blur" />
+    <OptionText StateKey="face_mask_padding" />
+</section>

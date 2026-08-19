@@ -1,0 +1,15 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/age_modifier_options.py. Python shows this block only
+    while 'age_modifier' is in the processors checkbox group (its listen() toggles visibility
+    on that group's change event); the same condition is expressed directly here.
+*@
+
+@if (State.GetList("processors").Contains("age_modifier"))
+{
+    <section class="ff-panel">
+        <h2>AGE MODIFIER</h2>
+        <OptionDropdown StateKey="age_modifier_model" />
+        <OptionSlider StateKey="age_modifier_direction" />
+    </section>
+}

@@ -1,0 +1,43 @@
+@inherits UiComponentBase
+@*
+    Gradio: gradio.Dropdown(label = ..., value = ..., choices = ...). One state key in, the
+    descriptor supplies the choices and the current value comes from UiState, so a control
+    can never offer a choice the CLI would reject.
+*@
+
+<div class="ff-field">
+    <label for="@_id">@Label</label>
+    <select id="@_id" value="@(State.GetString(StateKey) ?? string.Empty)" @onchange="OnChanged">
+        @if (AllowNone)
+        {
+            <option value="">none</option>
+        }
+        @foreach (var choice in _descriptor.Choices)
+        {
+            <option value="@choice">@choice</option>
+        }
+    </select>
+</div>
+
+@code {
+    private readonly string _id = "ff-" + Guid.NewGuid().ToString("N")[..8];
+    private UiOptionDescriptor _descriptor = default!;
+
+    [Parameter, EditorRequired] public string StateKey { get; set; } = string.Empty;
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>True for an option whose argparse default is None and whose absence is
+    /// meaningful — e.g. --face-selector-gender, where "not filtering by gender" is a real
+    /// setting rather than a missing one.</summary>
+    [Parameter] public bool AllowNone { get; set; }
+
+    private string Label => Title ?? UiLabels.Humanize(StateKey);
+
+    protected override void OnParametersSet() => _descriptor = UiOptionDescriptors.Get(StateKey);
+
+    private void OnChanged(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+        State.SetString(StateKey, string.IsNullOrEmpty(value) ? null : value);
+    }
+}

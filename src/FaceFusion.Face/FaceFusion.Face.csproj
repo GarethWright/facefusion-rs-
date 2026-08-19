@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FaceFusion.Types\FaceFusion.Types.csproj" />
+    <ProjectReference Include="..\FaceFusion.Core\FaceFusion.Core.csproj" />
+    <ProjectReference Include="..\FaceFusion.Tensors\FaceFusion.Tensors.csproj" />
+    <ProjectReference Include="..\FaceFusion.Vision\FaceFusion.Vision.csproj" />
+    <ProjectReference Include="..\FaceFusion.Inference\FaceFusion.Inference.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
+    <PackageReference Include="OpenCvSharp4.official.runtime.linux-x64" Version="4.13.0.20260627" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

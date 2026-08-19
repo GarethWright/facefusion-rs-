@@ -5,3 +5,13 @@ __pycache__
 .idea
 .jobs
 .vscode
+
+# .NET build output
+bin/
+obj/
+*.user
+TestResults/
+
+# node modules for the browser-driven UI test (tests/ui)
+node_modules/
+package-lock.json

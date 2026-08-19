@@ -1,0 +1,16 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/frame_colorizer_options.py. Python shows this block only
+    while 'frame_colorizer' is in the processors checkbox group (its listen() toggles visibility
+    on that group's change event); the same condition is expressed directly here.
+*@
+
+@if (State.GetList("processors").Contains("frame_colorizer"))
+{
+    <section class="ff-panel">
+        <h2>FRAME COLORIZER</h2>
+        <OptionDropdown StateKey="frame_colorizer_model" />
+        <OptionDropdown StateKey="frame_colorizer_size" />
+        <OptionSlider StateKey="frame_colorizer_blend" />
+    </section>
+}

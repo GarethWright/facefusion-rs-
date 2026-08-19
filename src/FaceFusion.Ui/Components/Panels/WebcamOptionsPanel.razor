@@ -1,0 +1,99 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/webcam_options.py. These four settings are UI-only —
+    they have no CLI flag and so no UiOptionDescriptor — so they bind to UiWebcam directly
+    rather than through UiState.
+*@
+@inject UiWebcam Webcam
+
+<section class="ff-panel">
+    <h2>WEBCAM</h2>
+
+    <div class="ff-field">
+        <label for="ff-webcam-device">WEBCAM DEVICE ID</label>
+        <select id="ff-webcam-device" value="@Webcam.DeviceId" @onchange="OnDeviceChanged" disabled="@Webcam.IsStreaming">
+            @if (_cameraIds.Count == 0)
+            {
+                <option value="0">none detected</option>
+            }
+            @foreach (var cameraId in _cameraIds)
+            {
+                <option value="@cameraId">@cameraId</option>
+            }
+        </select>
+    </div>
+
+    @*
+        Not in Python's UI, but Python's camera_manager.get_remote_camera_capture is: any
+        source string OpenCV accepts, including an RTSP/HTTP URL or a file path. It is the only
+        way to use the live path on a machine with no camera. See UiWebcam's class remarks.
+    *@
+    <div class="ff-field">
+        <label for="ff-webcam-remote">REMOTE SOURCE (URL OR FILE, OVERRIDES THE DEVICE)</label>
+        <input id="ff-webcam-remote" type="text" value="@Webcam.RemoteSource" disabled="@Webcam.IsStreaming"
+               placeholder="rtsp://… or a path to a video file"
+               @onchange="e => Webcam.RemoteSource = e.Value?.ToString() ?? string.Empty" />
+    </div>
+
+    <div class="ff-field">
+        <label>WEBCAM MODE</label>
+        <div class="ff-checkboxes">
+            @foreach (var mode in UiWebcam.WebcamModes)
+            {
+                <label class="ff-checkbox">
+                    <input type="radio" name="ff-webcam-mode" value="@mode" checked="@(Webcam.Mode == mode)"
+                           disabled="@Webcam.IsStreaming" @onchange="() => Webcam.Mode = mode" />
+                    <span>@mode</span>
+                </label>
+            }
+        </div>
+    </div>
+
+    <div class="ff-field">
+        <label for="ff-webcam-resolution">WEBCAM RESOLUTION</label>
+        <select id="ff-webcam-resolution" value="@Webcam.Resolution" disabled="@Webcam.IsStreaming"
+                @onchange="e => Webcam.Resolution = e.Value?.ToString() ?? Webcam.Resolution">
+            @foreach (var resolution in UiWebcam.WebcamResolutions)
+            {
+                <option value="@resolution">@resolution</option>
+            }
+        </select>
+    </div>
+
+    <div class="ff-field">
+        <label for="ff-webcam-fps">WEBCAM FPS <span class="ff-value">@Webcam.Fps</span></label>
+        <input id="ff-webcam-fps" type="range" min="1" max="30" step="1" value="@Webcam.Fps"
+               disabled="@Webcam.IsStreaming" @oninput="OnFpsChanged" />
+    </div>
+</section>
+
+@code {
+    private IReadOnlyList<int> _cameraIds = Array.Empty<int>();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _cameraIds = Webcam.DetectLocalCameraIds();
+
+        if (_cameraIds.Count > 0)
+        {
+            Webcam.DeviceId = _cameraIds[0];
+        }
+    }
+
+    private void OnDeviceChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var deviceId))
+        {
+            Webcam.DeviceId = deviceId;
+        }
+    }
+
+    private void OnFpsChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fps))
+        {
+            Webcam.Fps = fps;
+        }
+    }
+}

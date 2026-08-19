@@ -1,0 +1,14 @@
+@inherits UiComponentBase
+@*
+    Gradio: facefusion/uis/components/face_debugger_options.py. Python shows this block only
+    while 'face_debugger' is in the processors checkbox group (its listen() toggles visibility
+    on that group's change event); the same condition is expressed directly here.
+*@
+
+@if (State.GetList("processors").Contains("face_debugger"))
+{
+    <section class="ff-panel">
+        <h2>FACE DEBUGGER</h2>
+        <OptionCheckboxGroup StateKey="face_debugger_items" />
+    </section>
+}

@@ -1,0 +1,27 @@
+name: dotnet
+
+on: [ push, pull_request ]
+
+# CI for the .NET port (see docs/DOTNET_PORT_PLAN.md). The existing Python `ci`
+# workflow is untouched and keeps running against facefusion/ during the transition.
+
+jobs:
+ build:
+  strategy:
+   fail-fast: false
+   matrix:
+    os: [ ubuntu-latest, windows-latest, macos-latest ]
+  runs-on: ${{ matrix.os }}
+  steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+  - name: Set up .NET
+    uses: actions/setup-dotnet@v4
+    with:
+     dotnet-version: '8.0.x'
+  - name: Restore
+    run: dotnet restore
+  - name: Build
+    run: dotnet build --no-restore --configuration Release
+  - name: Test
+    run: dotnet test --no-build --configuration Release --verbosity normal

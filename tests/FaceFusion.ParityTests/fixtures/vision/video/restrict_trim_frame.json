@@ -1,0 +1,50 @@
+[
+    {
+        "trim_frame_start": null,
+        "trim_frame_end": null,
+        "result": [
+            0,
+            270
+        ]
+    },
+    {
+        "trim_frame_start": 10,
+        "trim_frame_end": null,
+        "result": [
+            10,
+            270
+        ]
+    },
+    {
+        "trim_frame_start": null,
+        "trim_frame_end": 50,
+        "result": [
+            0,
+            50
+        ]
+    },
+    {
+        "trim_frame_start": 10,
+        "trim_frame_end": 50,
+        "result": [
+            10,
+            50
+        ]
+    },
+    {
+        "trim_frame_start": -5,
+        "trim_frame_end": 1000,
+        "result": [
+            0,
+            270
+        ]
+    },
+    {
+        "trim_frame_start": 100,
+        "trim_frame_end": 50,
+        "result": [
+            100,
+            50
+        ]
+    }
+]

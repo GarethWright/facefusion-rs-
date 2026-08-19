@@ -1,0 +1,32 @@
+[
+    {
+        "fps": 25.0,
+        "trim_frame_start": 0,
+        "trim_frame_end": 270,
+        "result": 270
+    },
+    {
+        "fps": 30.0,
+        "trim_frame_start": 0,
+        "trim_frame_end": 270,
+        "result": 324
+    },
+    {
+        "fps": 12.5,
+        "trim_frame_start": 10,
+        "trim_frame_end": 100,
+        "result": 45
+    },
+    {
+        "fps": 25.0,
+        "trim_frame_start": 50,
+        "trim_frame_end": 60,
+        "result": 10
+    },
+    {
+        "fps": 60.0,
+        "trim_frame_start": 0,
+        "trim_frame_end": 1,
+        "result": 2
+    }
+]
